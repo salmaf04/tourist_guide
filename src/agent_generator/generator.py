@@ -10,61 +10,67 @@ from mesa.space import MultiGrid
 from mesa.datacollection import DataCollector
 from mesa.time import RandomActivation
 import os
-import requests
-from openai import OpenAI
+import google.generativeai as genai
+import time
 
-os.environ['GRPC_DNS_RESOLVER'] = 'native'
+GEMINI_API_KEY = 'AIzaSyCkN0mxdFQpGajEwB8sZm2fUsJzhpTCfvk'  
+genai.configure(api_key=GEMINI_API_KEY)
 
-OPENROUTER_API_KEY = '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'
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-OPENROUTER_HEADERS = {
-    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-    "Content-Type": "application/json"
-}
-
-class OpenRouterClient:
+class GeminiClient:
     """
-    Cliente para interactuar con la API de OpenRouter.
+    Cliente para interactuar con la API de Gemini.
     """
-    def __init__(self, api_key: str, base_url: str = "https://openrouter.ai/api/v1"):
-        self.api_key = api_key
-        self.base_url = base_url
-        self.headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
+    def __init__(self):
+        self.model = genai.GenerativeModel('gemini-2.0-flash')
+        self.generation_config = {
+            'temperature': 0.9,
+            'top_p': 1,
+            'top_k': 32,
+            'max_output_tokens': 200,
         }
+        self.max_retries = 12
+        self.retry_delay = 5  # seconds
 
-    def generate(self, prompt: str, system: Optional[str] = None, model: str = "deepseek/deepseek-r1:free") -> str:
+    def generate(self, prompt: str, system: Optional[str] = None) -> str:
         """
-        Genera una respuesta usando el modelo especificado de OpenRouter.
+        Genera una respuesta usando Gemini con reintentos por límite de tasa.
         """
-        messages = []
-        if system:
-            messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
-        data = {
-            "model": model,
-            "messages": messages,
-            "temperature": 0.7,
-            "max_tokens": 256
-        }
-        try:
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers=self.headers,
-                json=data,
-                timeout=30
-            )
-            if response.status_code != 200:
-                print("Respuesta de error OpenRouter:", response.status_code, response.text)
-            response.raise_for_status()
-            result = response.json()
-            return result["choices"][0]["message"]["content"].strip()
-        except Exception as e:
-            print(f"Error con OpenRouter/DeepSeek: {e}")
-            return "[Respuesta no disponible]"
+        retries = 0
+        while retries < self.max_retries:
+            try:
+                if system:
+                    prompt = f"{system}\n{prompt}"
+                
+                safety_settings = [
+                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+                ]
+                
+                response = self.model.generate_content(
+                    prompt,
+                    generation_config=self.generation_config,
+                    safety_settings=safety_settings
+                )
+                
+                if response.text:
+                    return response.text.strip()
+                return "[Respuesta no disponible]"
+                
+            except Exception as e:
+                if "429" in str(e) or "quota" in str(e).lower():
+                    retries += 1
+                    if retries < self.max_retries:
+                        print(f"\nLímite de solicitudes alcanzado. Esperando {self.retry_delay} segundos...")
+                        time.sleep(self.retry_delay)
+                        continue
+                print(f"Error con Gemini después de {retries} intentos: {e}")
+                return "[Error de generación]"
+            
+        return "[Límite de solicitudes excedido]"
 
-openrouter_client = OpenRouterClient(OPENROUTER_API_KEY)
+gemini_client = GeminiClient()
 
 @dataclass
 class Nodo:
@@ -77,31 +83,31 @@ class Nodo:
     descripcion: str
     agentes: List[str]
 
-@dataclass(unsafe_hash=True)
 class Agente(Agent):
     """
     Agente de la simulación, asociado a un rol y un lugar.
     """
-    unique_id: str
-    model: Model
-    rol: str
-    lugar_id: str
-    prompt: str
-    interacciones: List[Dict] = field(default_factory=list, hash=False)
+    def __init__(self, unique_id: str, model, rol: str, lugar_id: str, prompt: str):
+        super().__init__(model)
+        self.unique_id = unique_id
+        self.rol = rol
+        self.lugar_id = lugar_id
+        self.prompt = prompt
+        self.interacciones = []
 
-@dataclass(unsafe_hash=True)
 class Turista(Agent):
     """
     Representa al turista, con memoria priorizada y satisfacción.
     """
-    unique_id: int
-    model: Model
-    nombre: str
-    satisfaccion: float = 5.0
-    memoria_alta: List[tuple] = field(default_factory=list, hash=False)
-    memoria_media: List[tuple] = field(default_factory=list, hash=False)
-    memoria_baja: List[tuple] = field(default_factory=list, hash=False)
-    contexto_actual: List[Dict] = field(default_factory=list, hash=False)
+    def __init__(self, unique_id: int, model, nombre: str):
+        super().__init__(model)
+        self.unique_id = unique_id
+        self.nombre = nombre
+        self.satisfaccion = 5.0
+        self.memoria_alta = []
+        self.memoria_media = []
+        self.memoria_baja = []
+        self.contexto_actual = []
 
     LIMITE_ALTA = 5
     LIMITE_MEDIA = 7
@@ -112,17 +118,24 @@ class Turista(Agent):
         Agrega una experiencia a la memoria, asignando prioridad según el impacto.
         Si la cola se llena, degrada el recuerdo o lo olvida.
         """
+        print(f"DEBUG - Agregando experiencia: impacto={impacto:.2f}, satisfacción_antes={self.satisfaccion:.2f}")
+        
         if abs(impacto) >= 1.2:
             cola = self.memoria_alta
             limite = self.LIMITE_ALTA
+            print(f"DEBUG - Clasificado como memoria ALTA")
         elif abs(impacto) >= 0.5:
             cola = self.memoria_media
             limite = self.LIMITE_MEDIA
+            print(f"DEBUG - Clasificado como memoria MEDIA")
         else:
             cola = self.memoria_baja
             limite = self.LIMITE_BAJA
+            print(f"DEBUG - Clasificado como memoria BAJA")
 
         cola.append((texto, impacto))
+        
+        # Handle memory overflow with degradation
         if len(cola) > limite:
             degradado = cola.pop(0)
             if cola is self.memoria_alta:
@@ -136,7 +149,11 @@ class Turista(Agent):
                 self.memoria_baja.append(degradado)
                 if len(self.memoria_baja) > self.LIMITE_BAJA:
                     self.memoria_baja.pop(0)
+        
+        # Update satisfaction
+        satisfaccion_anterior = self.satisfaccion
         self.satisfaccion = max(0, min(10, self.satisfaccion + impacto))
+        print(f"DEBUG - Satisfacción actualizada: {satisfaccion_anterior:.2f} -> {self.satisfaccion:.2f} (cambio: {self.satisfaccion - satisfaccion_anterior:.2f})")
 
     def recuerdos_significativos(self, n=5):
         """
@@ -204,27 +221,37 @@ class SistemaDifusoImpacto:
         Calcula el impacto de una interacción usando lógica difusa.
         """
         try:
+            # Ensure values are within valid ranges
+            amabilidad_valor = max(0, min(10, amabilidad_valor))
+            satisfaccion_actual = max(0, min(10, satisfaccion_actual))
+            
             self.simulador.input['amabilidad'] = amabilidad_valor
             self.simulador.input['satisfaccion'] = satisfaccion_actual
             self.simulador.compute()
-            return self.simulador.output.get('impacto', 0.0)
+            
+            impacto = self.simulador.output.get('impacto', 0.0)
+            print(f"DEBUG - Fuzzy system: amabilidad={amabilidad_valor:.2f}, satisfaccion={satisfaccion_actual:.2f}, impacto={impacto:.2f}")
+            return impacto
         except Exception as e:
             print(f"Error en calcular_impacto: {e}")
-            return 0.0
+            # Return a random impact as fallback
+            fallback_impact = random.uniform(-1.0, 1.0)
+            print(f"DEBUG - Using fallback impact: {fallback_impact:.2f}")
+            return fallback_impact
 
 sistema_difuso = SistemaDifusoImpacto()
 
 class GeneradorAgentes:
     """
-    Genera agentes y sus prompts usando OpenRouter.
+    Genera agentes y sus prompts usando Gemini.
     """
     @staticmethod
     def generar_prompt_agente(rol: str, nodo: Nodo) -> str:
         """
-        Genera un prompt para un agente usando OpenRouter.
+        Genera un prompt para un agente usando Gemini.
         """
         prompt = f"Crea una descripción para un {rol} en {nodo.nombre} (2 oraciones)."
-        descripcion = openrouter_client.generate(prompt)
+        descripcion = gemini_client.generate(prompt)
         if descripcion == "[Respuesta no disponible]":
             return f"Un {rol} en {nodo.nombre}"
         return descripcion
@@ -235,47 +262,83 @@ class GeneradorAgentes:
         Crea una instancia de Agente con su prompt generado.
         """
         descripcion = cls.generar_prompt_agente(rol, nodo)
-        return Agente(
-            unique_id=f"{rol}_{nodo.id}_{random.randint(1000, 9999)}",
-            model=model,
-            rol=rol,
-            lugar_id=nodo.id,
-            prompt=f"Eres un {rol} en {nodo.nombre}. {descripcion}"
-        )
+        unique_id = f"{rol}_{nodo.id}_{random.randint(1000, 9999)}"
+        prompt = f"Eres un {rol} en {nodo.nombre}. {descripcion}"
+        return Agente(unique_id, model, rol, nodo.id, prompt)
 
 class SimuladorInteracciones:
     """
     Simula interacciones entre el turista y los agentes.
     """
     @staticmethod
-    def interactuar(turista: Turista, agente: Agente, nodo: Nodo, max_interacciones: int = 3):
+    def interactuar(turista: Turista, agente: Agente, nodo: Nodo, max_interacciones: int = 1):
         """
         Realiza una serie de interacciones entre un turista y un agente en un nodo.
         """
         interacciones_realizadas = 0
         while interacciones_realizadas < max_interacciones:
-            prompt = agente.prompt + "\n"
-            for ctx in turista.contexto_actual:
-                prompt += f"{ctx.get('role', '')}: {ctx.get('content', '')}\n"
-            prompt += f"{turista.nombre}: [Explora {nodo.nombre}]"
-            respuesta_texto = openrouter_client.generate(prompt)
-            if respuesta_texto == "[Respuesta no disponible]":
-                respuesta_texto = f"{agente.rol}: [Respuesta no disponible]"
-                amabilidad_valor = 5.0
+            contexto = "\n".join([
+                f"Contexto previo: {ctx['content']}" 
+                for ctx in turista.contexto_actual[-2:] if ctx.get('content')
+            ])
+            
+            prompt = (
+                f"Como {agente.rol} en {nodo.nombre}, interactúa con el turista {turista.nombre} "
+                f"que está explorando el lugar. {nodo.descripcion}\n"
+                f"Contexto de la conversación:\n{contexto}\n"
+                f"{turista.nombre}: [Explora {nodo.nombre}]\n"
+                f"Responde en español con una frase corta y amigable."
+            )
+            
+            respuesta_texto = gemini_client.generate(prompt)
+            
+            if not respuesta_texto or respuesta_texto in ["[Respuesta no disponible]", "[Error de generación]"]:
+                respuestas_fallback = [
+                    f"¡Bienvenido a {nodo.nombre}! Es un placer ayudarte.",
+                    f"Te recomiendo explorar esta área, es muy interesante.",
+                    f"¿Hay algo específico que te gustaría saber sobre {nodo.nombre}?",
+                    f"Espero que disfrutes tu visita a {nodo.nombre}.",
+                    f"Este lugar tiene mucha historia, déjame contarte algo interesante."
+                ]
+                respuesta_texto = random.choice(respuestas_fallback)
+                print(f"API falló, usando respuesta fallback: {respuesta_texto}")
             else:
-                amabilidad_valor = random.uniform(6, 9)
+                print(f"Respuesta de API: {respuesta_texto}")
+            
+            amabilidad_valor = random.uniform(2, 10)
+            
+            print(f"DEBUG - Antes del impacto: satisfacción={turista.satisfaccion:.2f}")
             impacto = sistema_difuso.calcular_impacto(amabilidad_valor, turista.satisfaccion)
+            
+            if abs(impacto) < 0.1:
+                if amabilidad_valor > 7:
+                    impacto = random.uniform(0.3, 1.2)
+                elif amabilidad_valor < 4:
+                    impacto = random.uniform(-1.2, -0.3)
+                else:
+                    impacto = random.uniform(-0.5, 0.5)
+                print(f"DEBUG - Impacto ajustado manualmente: {impacto:.2f}")
+            
             experiencia = f"{nodo.nombre} ({agente.rol}): {respuesta_texto}"
+            
+            print(f"DEBUG - Agregando experiencia con impacto: {impacto:.2f}")
             turista.agregar_experiencia(experiencia, impacto)
             turista.contexto_actual.append({"role": "assistant", "content": respuesta_texto})
+            
             agente.interacciones.append({
                 "turista": turista.nombre,
                 "respuesta": respuesta_texto,
                 "impacto": impacto,
                 "turno": interacciones_realizadas + 1
             })
+            
+            print(f"DEBUG - Nueva experiencia agregada: {experiencia[:80]}...")
+            print(f"DEBUG - Impacto aplicado: {impacto:.2f}")
+            print(f"DEBUG - Satisfacción después: {turista.satisfaccion:.2f}")
+            print(f"DEBUG - Total memorias: Alta={len(turista.memoria_alta)}, Media={len(turista.memoria_media)}, Baja={len(turista.memoria_baja)}")
+            
             interacciones_realizadas += 1
-            if random.random() > 0.6:
+            if random.random() > 0.8:
                 break
 
 class ModeloTurismo(Model):
@@ -291,26 +354,43 @@ class ModeloTurismo(Model):
             agent_reporters={"Satisfacción": lambda a: getattr(a, 'satisfaccion', None)}
         )
         self.nodos = [Nodo(**nodo_data) for nodo_data in lista_nodos]
-        self.turista = Turista(
-            unique_id=0,
-            model=self,
-            nombre=nombre_turista
-        )
+        print(f"DEBUG - Creados {len(self.nodos)} nodos")
+        
+        self.turista = Turista(0, self, nombre_turista)
         self.schedule.add(self.turista)
+        print(f"DEBUG - Turista agregado al schedule")
+        
+        agentes_creados = 0
         for nodo in self.nodos:
+            print(f"DEBUG - Procesando nodo {nodo.nombre} con agentes: {nodo.agentes}")
             for rol in nodo.agentes:
                 agente = GeneradorAgentes.crear_agente(rol, nodo, self)
                 self.schedule.add(agente)
+                agentes_creados += 1
+                print(f"DEBUG - Agente creado: {agente.rol} en {nodo.nombre} (ID: {agente.unique_id})")
+        
+        print(f"DEBUG - Total agentes creados: {agentes_creados}")
+        print(f"DEBUG - Total agentes en schedule: {len(self.schedule.agents)}")
 
     def step(self):
         """
         Ejecuta un paso de simulación: posibles interacciones en cada nodo y recolección de datos.
         """
+        print(f"DEBUG - Iniciando paso, satisfacción actual: {self.turista.satisfaccion:.2f}")
+        print(f"DEBUG - Total agentes en schedule: {len(self.schedule.agents)}")
+        
         for nodo in self.nodos:
             agentes_en_nodo = [a for a in self.schedule.agents if isinstance(a, Agente) and a.lugar_id == nodo.id]
-            if agentes_en_nodo and random.random() > 0.3:
+            print(f"DEBUG - Nodo {nodo.nombre}: {len(agentes_en_nodo)} agentes encontrados")
+            
+            if agentes_en_nodo:
                 agente = random.choice(agentes_en_nodo)
+                print(f"DEBUG - Interactuando en {nodo.nombre} con {agente.rol}")
                 SimuladorInteracciones.interactuar(self.turista, agente, nodo)
+            else:
+                print(f"DEBUG - No hay agentes en {nodo.nombre}")
+        
+        print(f"DEBUG - Fin del paso, satisfacción final: {self.turista.satisfaccion:.2f}")
         self.datacollector.collect(self)
 
 def ejecutar_simulaciones(n_simulaciones: int, pasos: int = 10):
@@ -335,16 +415,30 @@ def ejecutar_simulaciones(n_simulaciones: int, pasos: int = 10):
     ]
     satisfacciones = []
     for i in range(n_simulaciones):
+        print(f"\n=== INICIANDO SIMULACIÓN {i+1} ===")
         modelo = ModeloTurismo(lista_nodos, nombre_turista=f"Ana_{i+1}")
-        for _ in range(pasos):
+        print(f"Satisfacción inicial: {modelo.turista.satisfaccion}")
+        
+        for paso in range(pasos):
+            print(f"\n--- Paso {paso+1} ---")
             modelo.step()
+            print(f"Satisfacción después del paso {paso+1}: {modelo.turista.satisfaccion:.2f}")
+        
         satisfaccion_final = modelo.turista.satisfaccion
         satisfacciones.append(satisfaccion_final)
-        print(f"Simulación {i+1}: Satisfacción final = {satisfaccion_final:.1f}/10")
+        print(f"\nSimulación {i+1}: Satisfacción final = {satisfaccion_final:.1f}/10")
+        
+        # Debug memory contents
+        print(f"Memorias totales: Alta={len(modelo.turista.memoria_alta)}, Media={len(modelo.turista.memoria_media)}, Baja={len(modelo.turista.memoria_baja)}")
+        
         recuerdos = modelo.turista.recuerdos_significativos()
         print("Recuerdos más significativos:")
-        for rec in recuerdos:
-            print(f"- {rec}")
+        if recuerdos:
+            for rec in recuerdos:
+                print(f"- {rec}")
+        else:
+            print("- No hay recuerdos significativos")
+        print("=" * 50)
     promedio = sum(satisfacciones) / len(satisfacciones)
     print(f"\nPromedio de satisfacción tras {n_simulaciones} simulaciones: {promedio:.2f}/10")
     print("Prueba sistema difuso:")
@@ -353,5 +447,5 @@ def ejecutar_simulaciones(n_simulaciones: int, pasos: int = 10):
     return satisfacciones, promedio
 
 if __name__ == "__main__":
-    n_simulaciones = 5
-    ejecutar_simulaciones(n_simulaciones)
+    n_simulaciones = 3
+    ejecutar_simulaciones(n_simulaciones, pasos=5)

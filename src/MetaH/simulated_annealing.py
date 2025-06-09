@@ -1,10 +1,9 @@
 import random
 import math
-import Constants
 import numpy
 
 class RouteFinder:
-    def __init__(self, distance_matrix, node_params, tourist_param):
+    def __init__(self, distance_matrix, node_params):
         """
         Constructor de la clase RouteFinder.
 
@@ -17,12 +16,11 @@ class RouteFinder:
         """
         self.distance_matrix = distance_matrix
         self.node_params = node_params
-        self.tourist_param = tourist_param
         self.num_nodes = len(distance_matrix)
         self.num_cities = len(node_params)
     
 
-    def find_route(self, time, starting_node):
+    def find_route(self, tourist_param, time, starting_node):
         """
         Encuentra una ruta que maximice la función goal_func(route) y cumpla con la restricción de tiempo.
 
@@ -77,9 +75,9 @@ class RouteFinder:
         # Crea una copia de la lista
         new_route = route[:]  # o new_route = route.copy()
 
-        # Intercambia dos nodos adyacentes en la ruta
+        # Intercambia dos nodos en la ruta
         i = random.randint(1, len(new_route) - 2)
-        j = i + 1
+        j = random.randint(max(1,i-3), min(len(new_route) - 2),i+3)
         new_route[i], new_route[j] = new_route[j], new_route[i]
         return new_route
 
@@ -118,9 +116,9 @@ class RouteFinder:
         """
         t=0
         for i in range(1, length):
-            t+=self.distance_matrix[route[i-1]][route[i]]/Constants.SPEED
+            t+=self.distance_matrix[route[i-1]][route[i]]
             t+=self.node_params[route[i]]['time']
 
-        t+=self.distance_matrix[route[length-1]][route[0]]/Constants.SPEED
+        t+=self.distance_matrix[route[length-1]][route[0]]
  
         return t

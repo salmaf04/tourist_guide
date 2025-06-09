@@ -1,0 +1,1408 @@
+{
+  "touristSites": [
+    {
+      "name": "Eiffel Tower",
+      "location": {
+        "city": "Paris",
+        "country": "France"
+      },
+      "type": "Architectural",
+      "description": "An iconic iron lattice tower built for the 1889 World's Fair, symbolizing Paris and offering panoramic city views.",
+      "visitorAppeal": "Observation decks with views of Paris, romantic ambiance, light shows in the evening, UNESCO proximity (Seine Banks).",
+      "accessibility": "Excellent; metro (Trocadéro or Bir-Hakeim stations), near Paris airports (CDG, ORY).",
+      "bestTimeToVisit": "Spring (April-May) or Fall (September-October) for mild weather and fewer crowds.",
+      "estimatedVisitDuration": "2-3 hours",
+      "touristClassification": "Must-Visit"
+    },
+    {
+      "name": "Louvre Museum",
+      "location": {
+        "city": "Paris",
+        "country": "France"
+      },
+      "type": "Cultural",
+      "description": "The world’s largest art museum, home to the Mona Lisa, Venus de Milo, and thousands of artworks.",
+      "visitorAppeal": "Iconic glass pyramid, vast art collection, historical palace, central location along the Seine.",
+      "accessibility": "Excellent; metro (Palais Royal-Musée du Louvre), near Paris airports.",
+      "bestTimeToVisit": "Winter (November-March) for fewer crowds, except holiday peaks.",
+      "estimatedVisitDuration": "3-5 hours",
+      "touristClassification": "Must-Visit"
+    },
+    {
+      "name": "Notre-Dame Cathedral",
+      "location": {
+        "city": "Paris",
+        "country": "France"
+      },
+      "type": "Religious/Architectural",
+      "description": "A historic Catholic cathedral known for its Gothic architecture and iconic twin towers.",
+      "visitorAppeal": "Stained glass windows, ongoing restoration post-2019 fire, literary fame from Victor Hugo’s novel.",
+      "accessibility": "Excellent; metro (Cité or Saint-Michel), walkable from central Paris.",
+      "bestTimeToVisit": "Spring (April-May) or Fall (September-October) for pleasant weather.",
+      "estimatedVisitDuration": "1-2 hours",
+      "touristClassification": "Must-Visit"
+    },
+    {
+      "name": "Sacré-Cœur Basilica",
+      "location": {
+        "city": "Paris",
+        "country": "France"
+      },
+      "type": "Religious",
+      "description": "A Roman-Byzantine basilica atop Montmartre, offering stunning views of Paris.",
+      "visitorAppeal": "White travertine facade, panoramic views, vibrant Montmartre neighborhood, free entry.",
+      "accessibility": "Good; metro (Anvers), funicular to the top, near Paris city center.",
+      "bestTimeToVisit": "Summer (June-August) for clear skies and views.",
+      "estimatedVisitDuration": "1-2 hours",
+      "touristClassification": "Highly Recommended"
+    },
+    {
+      "name": "Musée d’Orsay",
+      "location": {
+        "city": "Paris",
+        "country": "France"
+      },
+      "type": "Cultural",
+      "description": "A museum in a former railway station, showcasing Impressionist and Post-Impressionist masterpieces.",
+      "visitorAppeal": "Works by Monet, Van Gogh, and Degas, stunning Beaux-Arts architecture, Seine River views.",
+      "accessibility": "Excellent; metro (Solférino), walkable from Louvre.",
+      "bestTimeToVisit": "Winter (November-March) for fewer crowds.",
+      "estimatedVisitDuration": "2-3 hours",
+      "touristClassification": "Highly Recommended"
+    },
+    {
+      "name": "Versailles Palace",
+      "location": {
+        "city": "Paris",
+        "country": "France"
+      },
+      "type": "Historical/Architectural",
+      "description": "A royal palace with opulent interiors, extensive gardens, and the famous Hall of Mirrors.",
+      "visitorAppeal": "UNESCO World Heritage Site, grand architecture, gardens with fountains, historical significance.",
+      "accessibility": "Good; train (RER C to Versailles-Château), 30 minutes from Paris center.",
+      "bestTimeToVisit": "Spring (April-May) for blooming gardens.",
+      "estimatedVisitDuration": "4-6 hours",
+      "touristClassification": "Must-Visit"
+    },
+    {
+      "name": "Centre Pompidou",
+      "location": {
+        "city": "Paris",
+        "country": "France"
+      },
+      "type": "Cultural",
+      "description": "A modern art museum with a distinctive high-tech architectural design.",
+      "visitorAppeal": "Works by Picasso and Matisse, rooftop views, vibrant Marais district.",
+      "accessibility": "Excellent; metro (Rambuteau), central location.",
+      "bestTimeToVisit": "Year-round, but Spring (April-May) for pleasant weather.",
+      "estimatedVisitDuration": "2-3 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Arc de Triomphe",
+      "location": {
+        "city": "Paris",
+        "country": "France"
+      },
+      "type": "Historical/Architectural",
+      "description": "A monumental arch honoring Napoleon’s victories, with an observation deck.",
+      "visitorAppeal": "Panoramic views of Champs-Élysées, historical significance, central location.",
+      "accessibility": "Excellent; metro (Charles de Gaulle-Étoile), walkable from city center.",
+      "bestTimeToVisit": "Summer (June-August) for evening views.",
+      "estimatedVisitDuration": "1-2 hours",
+      "touristClassification": "Highly Recommended"
+    },
+    {
+      "name": "Champs-Élysées",
+      "location": {
+        "city": "Paris",
+        "country": "France"
+      },
+      "type": "Cultural",
+      "description": "A famous avenue lined with shops, theaters, and cafes, leading to the Arc de Triomphe.",
+      "visitorAppeal": "Luxury shopping, vibrant atmosphere, proximity to major landmarks.",
+      "accessibility": "Excellent; multiple metro stations (Franklin D. Roosevelt, George V).",
+      "bestTimeToVisit": "Winter (December) for festive lights.",
+      "estimatedVisitDuration": "2-3 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Montmartre District",
+      "location": {
+        "city": "Paris",
+        "country": "France"
+      },
+      "type": "Cultural",
+      "description": "A bohemian neighborhood known for its artistic history and charming streets.",
+      "visitorAppeal": "Sacré-Cœur views, Place du Tertre with artists, historic cafes like Le Consulat.",
+      "accessibility": "Good; metro (Anvers or Abbesses), walkable but hilly.",
+      "bestTimeToVisit": "Spring (April-May) for pleasant walks.",
+      "estimatedVisitDuration": "2-4 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Seine River Cruise",
+      "location": {
+        "city": "Paris",
+        "country": "France"
+      },
+      "type": "Cultural/Natural",
+      "description": "A boat tour along the Seine, showcasing Paris’s landmarks from the water.",
+      "visitorAppeal": "Views of Notre-Dame, Louvre, and Eiffel Tower, romantic ambiance, dinner cruises.",
+      "accessibility": "Excellent; multiple departure points near metro stations.",
+      "bestTimeToVisit": "Summer (June-August) for evening cruises.",
+      "estimatedVisitDuration": "1-2 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Les Invalides",
+      "location": {
+        "city": "Paris",
+        "country": "France"
+      },
+      "type": "Historical",
+      "description": "A complex housing Napoleon’s tomb and military museums.",
+      "visitorAppeal": "Dome Church, Army Museum, historical significance, central location.",
+      "accessibility": "Excellent; metro (Invalides), near Eiffel Tower.",
+      "bestTimeToVisit": "Year-round, but Fall (September-October) for fewer crowds.",
+      "estimatedVisitDuration": "2-3 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Panthéon",
+      "location": {
+        "city": "Paris",
+        "country": "France"
+      },
+      "type": "Historical",
+      "description": "A neoclassical monument housing the tombs of French luminaries like Voltaire and Rousseau.",
+      "visitorAppeal": "Impressive architecture, crypt tours, Latin Quarter proximity.",
+      "accessibility": "Excellent; metro (Cardinal Lemoine), walkable from Notre-Dame.",
+      "bestTimeToVisit": "Spring (April-May) for pleasant weather.",
+      "estimatedVisitDuration": "1-2 hours",
+      "touristClassification": "Niche"
+    },
+    {
+      "name": "Jardin des Tuileries",
+      "location": {
+        "city": "Paris",
+        "country": "France"
+      },
+      "type": "Natural",
+      "description": "A historic garden between the Louvre and Place de la Concorde, with sculptures and fountains.",
+      "visitorAppeal": "Relaxing green space, seasonal fairs, proximity to major museums.",
+      "accessibility": "Excellent; metro (Tuileries), central location.",
+      "bestTimeToVisit": "Spring (April-May) for blooming flowers.",
+      "estimatedVisitDuration": "1-2 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Jardin du Luxembourg",
+      "location": {
+        "city": "Paris",
+        "country": "France"
+      },
+      "type": "Natural",
+      "description": "A beautiful garden with the Luxembourg Palace, popular for leisurely strolls.",
+      "visitorAppeal": "Medicis Fountain, statues, children’s activities, Latin Quarter vibe.",
+      "accessibility": "Excellent; metro (Luxembourg), walkable from Panthéon.",
+      "bestTimeToVisit": "Summer (June-August) for lush greenery.",
+      "estimatedVisitDuration": "1-2 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Moulin Rouge",
+      "location": {
+        "city": "Paris",
+        "country": "France"
+      },
+      "type": "Cultural",
+      "description": "A legendary cabaret known for its can-can performances and vibrant nightlife.",
+      "visitorAppeal": "Iconic red windmill, evening shows, Montmartre nightlife.",
+      "accessibility": "Excellent; metro (Blanche), near Sacré-Cœur.",
+      "bestTimeToVisit": "Year-round, but evenings for shows.",
+      "estimatedVisitDuration": "2-3 hours",
+      "touristClassification": "Niche"
+    },
+    {
+      "name": "Sainte-Chapelle",
+      "location": {
+        "city": "Paris",
+        "country": "France"
+      },
+      "type": "Religious/Architectural",
+      "description": "A Gothic chapel famous for its stunning stained glass windows.",
+      "visitorAppeal": "Colorful glass depicting biblical scenes, intimate setting, near Notre-Dame.",
+      "accessibility": "Excellent; metro (Cité), central location.",
+      "bestTimeToVisit": "Spring (April-May) for sunlight through windows.",
+      "estimatedVisitDuration": "1-1.5 hours",
+      "touristClassification": "Highly Recommended"
+    },
+    {
+      "name": "Palais Garnier",
+      "location": {
+        "city": "Paris",
+        "country": "France"
+      },
+      "type": "Cultural/Architectural",
+      "description": "A grand opera house known for its opulent interiors and historical significance.",
+      "visitorAppeal": "Chagall ceiling, grand staircase, Phantom of the Opera inspiration.",
+      "accessibility": "Excellent; metro (Opéra), central location.",
+      "bestTimeToVisit": "Year-round, but check for guided tours or performances.",
+      "estimatedVisitDuration": "1-2 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Marais District",
+      "location": {
+        "city": "Paris",
+        "country": "France"
+      },
+      "type": "Cultural",
+      "description": "A historic district with narrow streets, trendy boutiques, and Jewish heritage.",
+      "visitorAppeal": "Place des Vosges, Picasso Museum, vibrant cafes, historical charm.",
+      "accessibility": "Excellent; metro (Saint-Paul), walkable from city center.",
+      "bestTimeToVisit": "Spring (April-May) for pleasant walks.",
+      "estimatedVisitDuration": "2-4 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Catacombs of Paris",
+      "location": {
+        "city": "Paris",
+        "country": "France"
+      },
+      "type": "Historical",
+      "description": "An underground ossuary holding the remains of over six million people.",
+      "visitorAppeal": "Unique historical experience, eerie tunnels, limited daily tickets.",
+      "accessibility": "Good; metro (Denfert-Rochereau), south of city center.",
+      "bestTimeToVisit": "Year-round, but book tickets in advance.",
+      "estimatedVisitDuration": "1-1.5 hours",
+      "touristClassification": "Niche"
+    },
+
+    {
+      "name": "Colosseum",
+      "location": {
+        "city": "Rome",
+        "country": "Italy"
+      },
+      "type": "Historical",
+      "description": "An ancient Roman amphitheater built in 70-80 AD, hosting gladiator contests and public spectacles.",
+      "visitorAppeal": "UNESCO World Heritage Site, historical significance, guided tours of underground chambers, proximity to Roman Forum.",
+      "accessibility": "Excellent; metro (Colosseo station), near Rome Fiumicino Airport.",
+      "bestTimeToVisit": "Spring (April-May) or Fall (October-November) for pleasant weather.",
+      "estimatedVisitDuration": "1.5-3 hours",
+      "touristClassification": "Must-Visit"
+    },
+    {
+      "name": "Roman Forum",
+      "location": {
+        "city": "Rome",
+        "country": "Italy"
+      },
+      "type": "Historical",
+      "description": "The ancient center of Roman public life, with ruins of temples and government buildings.",
+      "visitorAppeal": "Archaeological significance, proximity to Colosseum, guided tours available.",
+      "accessibility": "Excellent; metro (Colosseo), walkable from central Rome.",
+      "bestTimeToVisit": "Spring (April-May) for mild weather.",
+      "estimatedVisitDuration": "1.5-2 hours",
+      "touristClassification": "Must-Visit"
+    },
+    {
+      "name": "Pantheon",
+      "location": {
+        "city": "Rome",
+        "country": "Italy"
+      },
+      "type": "Historical/Architectural",
+      "description": "A well-preserved Roman temple with a massive dome and oculus, now a church.",
+      "visitorAppeal": "Architectural marvel, free entry, central location near Piazza Navona.",
+      "accessibility": "Excellent; walkable from central Rome, bus nearby.",
+      "bestTimeToVisit": "Year-round, but morning for fewer crowds.",
+      "estimatedVisitDuration": "1-1.5 hours",
+      "touristClassification": "Must-Visit"
+    },
+    {
+      "name": "Piazza Navona",
+      "location": {
+        "city": "Rome",
+        "country": "Italy"
+      },
+      "type": "Cultural",
+      "description": "A lively square with Bernini’s Fountain of the Four Rivers and historic buildings.",
+      "visitorAppeal": "Street artists, cafes, Baroque architecture, festive atmosphere.",
+      "accessibility": "Excellent; walkable from Pantheon, central location.",
+      "bestTimeToVisit": "Spring (April-May) for pleasant weather.",
+      "estimatedVisitDuration": "1-2 hours",
+      "touristClassification": "Highly Recommended"
+    },
+    {
+      "name": "Trevi Fountain",
+      "location": {
+        "city": "Rome",
+        "country": "Italy"
+      },
+      "type": "Architectural",
+      "description": "A Baroque fountain where visitors toss coins to ensure a return to Rome.",
+      "visitorAppeal": "Iconic landmark, stunning sculptures, vibrant atmosphere, central location.",
+      "accessibility": "Excellent; metro (Barberini), walkable from city center.",
+      "bestTimeToVisit": "Early morning or evening to avoid crowds.",
+      "estimatedVisitDuration": "0.5-1 hour",
+      "touristClassification": "Must-Visit"
+    },
+    {
+      "name": "Spanish Steps",
+      "location": {
+        "city": "Rome",
+        "country": "Italy"
+      },
+      "type": "Cultural",
+      "description": "A grand staircase connecting Piazza di Spagna with Trinità dei Monti church.",
+      "visitorAppeal": "Romantic setting, shopping nearby, views from the top, free entry.",
+      "accessibility": "Excellent; metro (Spagna), central location.",
+      "bestTimeToVisit": "Spring (April-May) for azalea blooms.",
+      "estimatedVisitDuration": "0.5-1 hour",
+      "touristClassification": "Highly Recommended"
+    },
+    {
+      "name": "Vatican Museums",
+      "location": {
+        "city": "Rome",
+        "country": "Italy"
+      },
+      "type": "Cultural",
+      "description": "A vast collection of art and historical artifacts, including the Sistine Chapel.",
+      "visitorAppeal": "Michelangelo’s frescoes, Raphael Rooms, historical treasures, proximity to St. Peter’s.",
+      "accessibility": "Good; metro (Ottaviano), short walk from Vatican City.",
+      "bestTimeToVisit": "Winter (November-March) for fewer crowds.",
+      "estimatedVisitDuration": "3-4 hours",
+      "touristClassification": "Must-Visit"
+    },
+    {
+      "name": "Castel Sant’Angelo",
+      "location": {
+        "city": "Rome",
+        "country": "Italy"
+      },
+      "type": "Historical",
+      "description": "A fortress and former papal residence with a rooftop offering panoramic views.",
+      "visitorAppeal": "Historical significance, Tiber River views, museum exhibits, near Vatican.",
+      "accessibility": "Excellent; walkable from Vatican, bus nearby.",
+      "bestTimeToVisit": "Spring (April-May) for pleasant weather.",
+      "estimatedVisitDuration": "1.5-2 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Piazza del Popolo",
+      "location": {
+        "city": "Rome",
+        "country": "Italy"
+      },
+      "type": "Cultural",
+      "description": "A large square with an Egyptian obelisk and twin churches, a gateway to Rome’s center.",
+      "visitorAppeal": "Vibrant atmosphere, proximity to Villa Borghese, street performers.",
+      "accessibility": "Excellent; metro (Flaminio), walkable from Spanish Steps.",
+      "bestTimeToVisit": "Year-round, but evening for lively ambiance.",
+      "estimatedVisitDuration": "1-1.5 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Villa Borghese Gardens",
+      "location": {
+        "city": "Rome",
+        "country": "Italy"
+      },
+      "type": "Natural",
+      "description": "A large park with gardens, museums, and a small lake for boating.",
+      "visitorAppeal": "Borghese Gallery, green oasis, bike rentals, family-friendly.",
+      "accessibility": "Excellent; metro (Spagna or Flaminio), near city center.",
+      "bestTimeToVisit": "Spring (April-May) for blooming gardens.",
+      "estimatedVisitDuration": "2-3 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Borghese Gallery",
+      "location": {
+        "city": "Rome",
+        "country": "Italy"
+      },
+      "type": "Cultural",
+      "description": "An art gallery in Villa Borghese, showcasing works by Bernini and Caravaggio.",
+      "visitorAppeal": "Masterpieces of Baroque art, limited entry for intimate experience, park setting.",
+      "accessibility": "Good; metro (Spagna), reservations recommended.",
+      "bestTimeToVisit": "Winter (November-March) for fewer crowds.",
+      "estimatedVisitDuration": "2 hours",
+      "touristClassification": "Highly Recommended"
+    },
+    {
+      "name": "Capitoline Museums",
+      "location": {
+        "city": "Rome",
+        "country": "Italy"
+      },
+      "type": "Cultural",
+      "description": "The world’s oldest public museums, with Roman statues and artifacts.",
+      "visitorAppeal": "Marcus Aurelius statue, views of Roman Forum, historical significance.",
+      "accessibility": "Excellent; walkable from Colosseum, central location.",
+      "bestTimeToVisit": "Year-round, but morning for quieter visits.",
+      "estimatedVisitDuration": "2-3 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Trastevere District",
+      "location": {
+        "city": "Rome",
+        "country": "Italy"
+      },
+      "type": "Cultural",
+      "description": "A charming neighborhood with cobblestone streets and lively nightlife.",
+      "visitorAppeal": "Local restaurants, Santa Maria in Trastevere, bohemian vibe.",
+      "accessibility": "Good; tram or bus from central Rome, walkable from Tiber River.",
+      "bestTimeToVisit": "Evening for dining and atmosphere.",
+      "estimatedVisitDuration": "2-4 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Baths of Caracalla",
+      "location": {
+        "city": "Rome",
+        "country": "Italy"
+      },
+      "type": "Historical",
+      "description": "Ancient Roman public baths with impressive ruins and mosaics.",
+      "visitorAppeal": "Archaeological site, summer opera performances, less crowded than Colosseum.",
+      "accessibility": "Good; metro (Circo Massimo), south of city center.",
+      "bestTimeToVisit": "Spring (April-May) for mild weather.",
+      "estimatedVisitDuration": "1-1.5 hours",
+      "touristClassification": "Niche"
+    },
+    {
+      "name": "Appian Way",
+      "location": {
+        "city": "Rome",
+        "country": "Italy"
+      },
+      "type": "Historical/Natural",
+      "description": "An ancient Roman road lined with ruins and catacombs.",
+      "visitorAppeal": "Historical significance, biking or walking trails, peaceful countryside setting.",
+      "accessibility": "Moderate; bus from Rome, bike rentals available.",
+      "bestTimeToVisit": "Spring (April-May) for pleasant weather.",
+      "estimatedVisitDuration": "2-4 hours",
+      "touristClassification": "Niche"
+    },
+    {
+      "name": "Campo de’ Fiori",
+      "location": {
+        "city": "Rome",
+        "country": "Italy"
+      },
+      "type": "Cultural",
+      "description": "A lively square with a daily market and historical significance.",
+      "visitorAppeal": "Fresh produce, local vibe, nearby restaurants, statue of Giordano Bruno.",
+      "accessibility": "Excellent; walkable from Pantheon, central location.",
+      "bestTimeToVisit": "Morning for market activity.",
+      "estimatedVisitDuration": "1-2 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Aventine Hill",
+      "location": {
+        "city": "Rome",
+        "country": "Italy"
+      },
+      "type": "Natural/Historical",
+      "description": "One of Rome’s seven hills, known for its gardens and keyhole view of St. Peter’s.",
+      "visitorAppeal": "Orange Garden, Knights of Malta keyhole, quiet escape from city bustle.",
+      "accessibility": "Good; metro (Circo Massimo), walkable from Trastevere.",
+      "bestTimeToVisit": "Spring (April-May) for blooming gardens.",
+      "estimatedVisitDuration": "1-2 hours",
+      "touristClassification": "Niche"
+    },
+    {
+      "name": "Piazza Venezia",
+      "location": {
+        "city": "Rome",
+        "country": "Italy"
+      },
+      "type": "Cultural",
+      "description": "A central square with the imposing Victor Emmanuel II Monument.",
+      "visitorAppeal": "Historical significance, proximity to Roman Forum, vibrant atmosphere.",
+      "accessibility": "Excellent; walkable from Colosseum, bus nearby.",
+      "bestTimeToVisit": "Year-round, but evening for lighting.",
+      "estimatedVisitDuration": "0.5-1 hour",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Catacombs of San Callisto",
+      "location": {
+        "city": "Rome",
+        "country": "Italy"
+      },
+      "type": "Historical/Religious",
+      "description": "Underground Christian burial sites with ancient frescoes and tunnels.",
+      "visitorAppeal": "Historical and spiritual significance, guided tours, quieter experience.",
+      "accessibility": "Moderate; bus from central Rome, near Appian Way.",
+      "bestTimeToVisit": "Spring (April-May) for mild weather.",
+      "estimatedVisitDuration": "1-1.5 hours",
+      "touristClassification": "Niche"
+    },
+    {
+      "name": "National Roman Museum",
+      "location": {
+        "city": "Rome",
+        "country": "Italy"
+      },
+      "type": "Cultural",
+      "description": "A museum with Roman artifacts across multiple sites, including Palazzo Massimo.",
+      "visitorAppeal": "Roman mosaics, statues, frescoes, central location near Termini station.",
+      "accessibility": "Excellent; metro (Termini), walkable from city center.",
+      "bestTimeToVisit": "Year-round, but morning for quieter visits.",
+      "estimatedVisitDuration": "2-3 hours",
+      "touristClassification": "Recommended"
+    },
+
+    {
+      "name": "Sagrada Familia",
+      "location": {
+        "city": "Barcelona",
+        "country": "Spain"
+      },
+      "type": "Religious/Architectural",
+      "description": "Antoni Gaudí’s unfinished modernist basilica, known for its unique architecture and intricate facades.",
+      "visitorAppeal": "UNESCO World Heritage Site, stunning interiors with stained glass, Gaudí’s masterpiece, rooftop views.",
+      "accessibility": "Excellent; metro (Sagrada Família station), near Barcelona-El Prat Airport.",
+      "bestTimeToVisit": "Spring (March-May) or Fall (September-November) for mild weather.",
+      "estimatedVisitDuration": "1.5-2 hours",
+      "touristClassification": "Highly Recommended"
+    },
+    {
+      "name": "Park Güell",
+      "location": {
+        "city": "Barcelona",
+        "country": "Spain"
+      },
+      "type": "Natural/Architectural",
+      "description": "A public park designed by Gaudí, featuring colorful mosaics and whimsical structures.",
+      "visitorAppeal": "UNESCO World Heritage Site, panoramic views, Gaudí’s unique style, family-friendly.",
+      "accessibility": "Good; metro (Lesseps), bus or taxi recommended due to hilly terrain.",
+      "bestTimeToVisit": "Spring (March-May) for mild weather.",
+      "estimatedVisitDuration": "2-3 hours",
+      "touristClassification": "Must-Visit"
+    },
+    {
+      "name": "Casa Batlló",
+      "location": {
+        "city": "Barcelona",
+        "country": "Spain"
+      },
+      "type": "Architectural",
+      "description": "A Gaudí-designed house with a colorful, organic facade and innovative interiors.",
+      "visitorAppeal": "UNESCO World Heritage Site, immersive audio tours, central Eixample location.",
+      "accessibility": "Excellent; metro (Passeig de Gràcia), walkable from city center.",
+      "bestTimeToVisit": "Year-round, but morning for fewer crowds.",
+      "estimatedVisitDuration": "1-1.5 hours",
+      "touristClassification": "Highly Recommended"
+    },
+    {
+      "name": "La Rambla",
+      "location": {
+        "city": "Barcelona",
+        "country": "Spain"
+      },
+      "type": "Cultural",
+      "description": "A vibrant pedestrian street lined with shops, cafes, and street performers.",
+      "visitorAppeal": "Lively atmosphere, La Boqueria market, proximity to Gothic Quarter.",
+      "accessibility": "Excellent; metro (Liceu or Drassanes), central location.",
+      "bestTimeToVisit": "Spring (March-May) for pleasant weather.",
+      "estimatedVisitDuration": "1-2 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Gothic Quarter",
+      "location": {
+        "city": "Barcelona",
+        "country": "Spain"
+      },
+      "type": "Historical/Cultural",
+      "description": "A historic neighborhood with narrow medieval streets and Roman remnants.",
+      "visitorAppeal": "Barcelona Cathedral, Plaça Sant Jaume, trendy bars, historical charm.",
+      "accessibility": "Excellent; metro (Jaume I), walkable from La Rambla.",
+      "bestTimeToVisit": "Evening for lively ambiance.",
+      "estimatedVisitDuration": "2-3 hours",
+      "touristClassification": "Highly Recommended"
+    },
+    {
+      "name": "Barcelona Cathedral",
+      "location": {
+        "city": "Barcelona",
+        "country": "Spain"
+      },
+      "type": "Religious",
+      "description": "A Gothic cathedral with intricate facades and a serene cloister.",
+      "visitorAppeal": "Stained glass, rooftop access, central Gothic Quarter location.",
+      "accessibility": "Excellent; metro (Jaume I), walkable from city center.",
+      "bestTimeToVisit": "Spring (March-May) for mild weather.",
+      "estimatedVisitDuration": "1-1.5 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Casa Milà (La Pedrera)",
+      "location": {
+        "city": "Barcelona",
+        "country": "Spain"
+      },
+      "type": "Architectural",
+      "description": "A Gaudí-designed building with a wavy stone facade and rooftop chimneys.",
+      "visitorAppeal": "UNESCO World Heritage Site, rooftop views, cultural exhibitions, Eixample district.",
+      "accessibility": "Excellent; metro (Diagonal), near Casa Batlló.",
+      "bestTimeToVisit": "Year-round, but evening for night tours.",
+      "estimatedVisitDuration": "1.5-2 hours",
+      "touristClassification": "Highly Recommended"
+    },
+    {
+      "name": "Montjuïc Castle",
+      "location": {
+        "city": "Barcelona",
+        "country": "Spain"
+      },
+      "type": "Historical",
+      "description": "A hilltop fortress with military history and panoramic views of Barcelona.",
+      "visitorAppeal": "City and port views, historical exhibits, nearby Montjuïc Park.",
+      "accessibility": "Good; cable car or bus from city center, metro (Paral·lel).",
+      "bestTimeToVisit": "Spring (March-May) for pleasant weather.",
+      "estimatedVisitDuration": "1.5-2 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Picasso Museum",
+      "location": {
+        "city": "Barcelona",
+        "country": "Spain"
+      },
+      "type": "Cultural",
+      "description": "A museum showcasing Pablo Picasso’s early works and connection to Barcelona.",
+      "visitorAppeal": "Extensive Picasso collection, Gothic Quarter setting, historical buildings.",
+      "accessibility": "Excellent; metro (Jaume I), walkable from city center.",
+      "bestTimeToVisit": "Winter (November-March) for fewer crowds.",
+      "estimatedVisitDuration": "1.5-2 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "La Boqueria Market",
+      "location": {
+        "city": "Barcelona",
+        "country": "Spain"
+      },
+      "type": "Cultural",
+      "description": "A vibrant food market offering fresh produce, tapas, and local delicacies.",
+      "visitorAppeal": "Culinary experience, colorful stalls, central location on La Rambla.",
+      "accessibility": "Excellent; metro (Liceu), walkable from Gothic Quarter.",
+      "bestTimeToVisit": "Morning for fresh produce and fewer crowds.",
+      "estimatedVisitDuration": "1-2 hours",
+      "touristClassification": "Highly Recommended"
+    },
+    {
+      "name": "Camp Nou",
+      "location": {
+        "city": "Barcelona",
+        "country": "Spain"
+      },
+      "type": "Cultural/Sports",
+      "description": "The iconic stadium of FC Barcelona, one of the world’s most famous football clubs.",
+      "visitorAppeal": "Museum tours, pitch views, football history, family-friendly.",
+      "accessibility": "Good; metro (Collblanc), west of city center.",
+      "bestTimeToVisit": "Year-round, but match days for atmosphere.",
+      "estimatedVisitDuration": "1.5-2 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Tibidabo Amusement Park",
+      "location": {
+        "city": "Barcelona",
+        "country": "Spain"
+      },
+      "type": "Cultural/Natural",
+      "description": "A historic amusement park on Tibidabo hill with rides and city views.",
+      "visitorAppeal": "Family-friendly, panoramic views, Sagrat Cor temple nearby.",
+      "accessibility": "Moderate; funicular or bus from city center, metro (Tibidabo).",
+      "bestTimeToVisit": "Summer (June-August) for outdoor fun.",
+      "estimatedVisitDuration": "3-4 hours",
+      "touristClassification": "Niche"
+    },
+    {
+      "name": "Poble Espanyol",
+      "location": {
+        "city": "Barcelona",
+        "country": "Spain"
+      },
+      "type": "Cultural",
+      "description": "An open-air museum showcasing replicas of Spanish architectural styles.",
+      "visitorAppeal": "Cultural exhibits, artisan shops, family-friendly, near Montjuïc.",
+      "accessibility": "Good; bus or metro (Espanya), near Montjuïc Castle.",
+      "bestTimeToVisit": "Spring (March-May) for pleasant weather.",
+      "estimatedVisitDuration": "2-3 hours",
+      "touristClassification": "Niche"
+    },
+    {
+      "name": "Barceloneta Beach",
+      "location": {
+        "city": "Barcelona",
+        "country": "Spain"
+      },
+      "type": "Natural",
+      "description": "A popular urban beach with a lively promenade and Mediterranean views.",
+      "visitorAppeal": "Sunbathing, seafood restaurants, water sports, vibrant atmosphere.",
+      "accessibility": "Excellent; metro (Barceloneta), walkable from city center.",
+      "bestTimeToVisit": "Summer (June-August) for beach weather.",
+      "estimatedVisitDuration": "2-4 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Palau de la Música Catalana",
+      "location": {
+        "city": "Barcelona",
+        "country": "Spain"
+      },
+      "type": "Cultural/Architectural",
+      "description": "A modernist concert hall with stunning stained glass and mosaics.",
+      "visitorAppeal": "UNESCO World Heritage Site, guided tours, vibrant performances.",
+      "accessibility": "Excellent; metro (Urquinaona), near Gothic Quarter.",
+      "bestTimeToVisit": "Year-round, but check for concert schedules.",
+      "estimatedVisitDuration": "1-1.5 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "MONTJUÏC Magic Fountain",
+      "location": {
+        "city": "Barcelona",
+        "country": "Spain"
+      },
+      "type": "Cultural",
+      "description": "A fountain with choreographed light and music shows, located near Plaça d’Espanya.",
+      "visitorAppeal": "Evening shows, family-friendly, near Montjuïc attractions.",
+      "accessibility": "Excellent; metro (Espanya), walkable from city center.",
+      "bestTimeToVisit": "Evening for illuminated shows.",
+      "estimatedVisitDuration": "1-1.5 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "MNAC (National Art Museum of Catalonia)",
+      "location": {
+        "city": "Barcelona",
+        "country": "Spain"
+      },
+      "type": "Cultural",
+      "description": "A museum showcasing Catalan art, including Romanesque frescoes and modernist works.",
+      "visitorAppeal": "Palau Nacional setting, city views, extensive art collection.",
+      "accessibility": "Good; metro (Espanya), near Montjuïc Castle.",
+      "bestTimeToVisit": "Winter (November-March) for fewer crowds.",
+      "estimatedVisitDuration": "2-3 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Parc de la Ciutadella",
+      "location": {
+        "city": "Barcelona",
+        "country": "Spain"
+      },
+      "type": "Natural",
+      "description": "A large park with a lake, zoo, and the Catalan Parliament building.",
+      "visitorAppeal": "Boating, green spaces, family-friendly, near Arc de Triomf.",
+      "accessibility": "Excellent; metro (Arc de Triomf), walkable from Gothic Quarter.",
+      "bestTimeToVisit": "Spring (March-May) for blooming gardens.",
+      "estimatedVisitDuration": "2-3 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Arc de Triomf",
+      "location": {
+        "city": "Barcelona",
+        "country": "Spain"
+      },
+      "type": "Architectural",
+      "description": "A triumphal arch built for the 1888 Barcelona Universal Exposition.",
+      "visitorAppeal": "Photo opportunities, proximity to Parc de la Ciutadella, free entry.",
+      "accessibility": "Excellent; metro (Arc de Triomf), central location.",
+      "bestTimeToVisit": "Year-round, but evening for lighting.",
+      "estimatedVisitDuration": "0.5-1 hour",
+      "touristClassification": "Niche"
+    },
+    {
+      "name": "Tibidabo Sagrat Cor Temple",
+      "location": {
+        "city": "Barcelona",
+        "country": "Spain"
+      },
+      "type": "Religious",
+      "description": "A hilltop church with a statue of the Sacred Heart and panoramic city views.",
+      "visitorAppeal": "Stunning vistas, neo-Gothic architecture, near Tibidabo Amusement Park.",
+      "accessibility": "Moderate; funicular or bus from city center, metro (Tibidabo).",
+      "bestTimeToVisit": "Summer (June-August) for clear skies.",
+      "estimatedVisitDuration": "1-1.5 hours",
+      "touristClassification": "Niche"
+    },
+
+    {
+      "name": "Acropolis",
+      "location": {
+        "city": "Athens",
+        "country": "Greece"
+      },
+      "type": "Historical",
+      "description": "A 5th-century BC citadel with the Parthenon, a temple dedicated to Athena, overlooking Athens.",
+      "visitorAppeal": "UNESCO World Heritage Site, ancient Greek architecture, panoramic views, nearby Acropolis Museum.",
+      "accessibility": "Good; metro (Acropoli station), near Athens International Airport.",
+      "bestTimeToVisit": "Spring (April-May) or Fall (September-October) to avoid heat.",
+      "estimatedVisitDuration": "2-3 hours",
+      "touristClassification": "Highly Recommended"
+    },
+    {
+      "name": "Acropolis Museum",
+      "location": {
+        "city": "Athens",
+        "country": "Greece"
+      },
+      "type": "Cultural",
+      "description": "A modern museum showcasing artifacts from the Acropolis and ancient Athens.",
+      "visitorAppeal": "Glass floors revealing excavations, Parthenon marbles, views of Acropolis.",
+      "accessibility": "Excellent; metro (Acropoli), walkable from Acropolis.",
+      "bestTimeToVisit": "Year-round, but morning for fewer crowds.",
+      "estimatedVisitDuration": "2-3 hours",
+      "touristClassification": "Must-Visit"
+    },
+    {
+      "name": "National Archaeological Museum",
+      "location": {
+        "city": "Athens",
+        "country": "Greece"
+      },
+      "type": "Cultural",
+      "description": "One of the world’s greatest museums, housing artifacts from ancient Greece.",
+      "visitorAppeal": "Antikythera Mechanism, Mycenaean gold, extensive collections.",
+      "accessibility": "Good; metro (Omonia or Victoria), central location.",
+      "bestTimeToVisit": "Winter (November-March) for fewer crowds.",
+      "estimatedVisitDuration": "2-3 hours",
+      "touristClassification": "Highly Recommended"
+    },
+    {
+      "name": "Plaka District",
+      "location": {
+        "city": "Athens",
+        "country": "Greece"
+      },
+      "type": "Cultural",
+      "description": "A historic neighborhood at the foot of the Acropolis with charming streets and tavernas.",
+      "visitorAppeal": "Traditional Greek dining, boutique shops, Anafiotika’s Cycladic vibe.",
+      "accessibility": "Excellent; metro (Monastiraki), walkable from Acropolis.",
+      "bestTimeToVisit": "Evening for lively atmosphere.",
+      "estimatedVisitDuration": "2-4 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Monastiraki Square",
+      "location": {
+        "city": "Athens",
+        "country": "Greece"
+      },
+      "type": "Cultural",
+      "description": "A bustling square with a flea market, historic mosque, and views of the Acropolis.",
+      "visitorAppeal": "Vibrant atmosphere, street food, shopping, proximity to Agora.",
+      "accessibility": "Excellent; metro (Monastiraki), central location.",
+      "bestTimeToVisit": "Morning for market activity.",
+      "estimatedVisitDuration": "1-2 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Ancient Agora",
+      "location": {
+        "city": "Athens",
+        "country": "Greece"
+      },
+      "type": "Historical",
+      "description": "The heart of ancient Athens, with ruins of civic buildings and the Temple of Hephaestus.",
+      "visitorAppeal": "Well-preserved temple, historical significance, green setting.",
+      "accessibility": "Excellent; metro (Monastiraki), walkable from Plaka.",
+      "bestTimeToVisit": "Spring (April-May) for mild weather.",
+      "estimatedVisitDuration": "1.5-2 hours",
+      "touristClassification": "Highly Recommended"
+    },
+    {
+      "name": "Temple of Olympian Zeus",
+      "location": {
+        "city": "Athens",
+        "country": "Greece"
+      },
+      "type": "Historical",
+      "description": "A colossal temple dedicated to Zeus, with massive Corinthian columns.",
+      "visitorAppeal": "Historical significance, proximity to National Garden, Hadrian’s Arch nearby.",
+      "accessibility": "Excellent; metro (Acropoli), walkable from city center.",
+      "bestTimeToVisit": "Spring (April-May) to avoid heat.",
+      "estimatedVisitDuration": "1-1.5 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "National Garden",
+      "location": {
+        "city": "Athens",
+        "country": "Greece"
+      },
+      "type": "Natural",
+      "description": "A lush urban park with ponds, a small zoo, and shaded pathways.",
+      "visitorAppeal": "Relaxing green space, family-friendly, near Syntagma Square.",
+      "accessibility": "Excellent; metro (Syntagma), central location.",
+      "bestTimeToVisit": "Spring (April-May) for blooming plants.",
+      "estimatedVisitDuration": "1-2 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Syntagma Square",
+      "location": {
+        "city": "Athens",
+        "country": "Greece"
+      },
+      "type": "Cultural",
+      "description": "Athens’ central square, home to the Greek Parliament and changing of the guard.",
+      "visitorAppeal": "Historical significance, vibrant atmosphere, proximity to major sites.",
+      "accessibility": "Excellent; metro (Syntagma), walkable from Plaka.",
+      "bestTimeToVisit": "Morning for guard-changing ceremony.",
+      "estimatedVisitDuration": "0.5-1 hour",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Lycabettus Hill",
+      "location": {
+        "city": "Athens",
+        "country": "Greece"
+      },
+      "type": "Natural",
+      "description": "A hill offering panoramic views of Athens, with a funicular to the top.",
+      "visitorAppeal": "Sunset views, small chapel, open-air theater in summer.",
+      "accessibility": "Good; funicular or taxi from city center, metro (Evangelismos).",
+      "bestTimeToVisit": "Evening for city lights.",
+      "estimatedVisitDuration": "1-2 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Benaki Museum",
+      "location": {
+        "city": "Athens",
+        "country": "Greece"
+      },
+      "type": "Cultural",
+      "description": "A museum showcasing Greek art and history from antiquity to the 20th century.",
+      "visitorAppeal": "Diverse collections, elegant mansion setting, near Syntagma.",
+      "accessibility": "Excellent; metro (Syntagma), walkable from city center.",
+      "bestTimeToVisit": "Year-round, but morning for quieter visits.",
+      "estimatedVisitDuration": "1.5-2 hours",
+      "touristClassification": "Niche"
+    },
+    {
+      "name": "Hadrian’s Arch",
+      "location": {
+        "city": "Athens",
+        "country": "Greece"
+      },
+      "type": "Historical",
+      "description": "A Roman-era arch built to honor Emperor Hadrian, near the Temple of Olympian Zeus.",
+      "visitorAppeal": "Historical significance, photo opportunities, central location.",
+      "accessibility": "Excellent; metro (Acropoli), walkable from National Garden.",
+      "bestTimeToVisit": "Year-round, but morning for fewer crowds.",
+      "estimatedVisitDuration": "0.5-1 hour",
+      "touristClassification": "Niche"
+    },
+    {
+      "name": "Kerameikos Cemetery",
+      "location": {
+        "city": "Athens",
+        "country": "Greece"
+      },
+      "type": "Historical",
+      "description": "An ancient cemetery with ruins and a small museum of funerary artifacts.",
+      "visitorAppeal": "Archaeological site, quiet setting, historical insights.",
+      "accessibility": "Good; metro (Kerameikos), near Monastiraki.",
+      "bestTimeToVisit": "Spring (April-May) for mild weather.",
+      "estimatedVisitDuration": "1-1.5 hours",
+      "touristClassification": "Niche"
+    },
+    {
+      "name": "Anafiotika",
+      "location": {
+        "city": "Athens",
+        "country": "Greece"
+      },
+      "type": "Cultural",
+      "description": "A tiny Cycladic-style neighborhood on the slopes of the Acropolis.",
+      "visitorAppeal": "Whitewashed houses, narrow alleys, Acropolis views, hidden gem.",
+      "accessibility": "Excellent; walkable from Plaka, metro (Monastiraki).",
+      "bestTimeToVisit": "Spring (April-May) for pleasant walks.",
+      "estimatedVisitDuration": "1-1.5 hours",
+      "touristClassification": "Niche"
+    },
+    {
+      "name": "Museum of Cycladic Art",
+      "location": {
+        "city": "Athens",
+        "country": "Greece"
+      },
+      "type": "Cultural",
+      "description": "A museum focused on ancient Cycladic and Greek art, with iconic figurines.",
+      "visitorAppeal": "Unique artifacts, modern exhibits, near Kolonaki district.",
+      "accessibility": "Excellent; metro (Evangelismos), walkable from Syntagma.",
+      "bestTimeToVisit": "Year-round, but morning for quieter visits.",
+      "estimatedVisitDuration": "1-1.5 hours",
+      "touristClassification": "Niche"
+    },
+    {
+      "name": "Stavros Niarchos Cultural Center",
+      "location": {
+        "city": "Athens",
+        "country": "Greece"
+      },
+      "type": "Cultural",
+      "description": "A modern complex with a library, opera house, and park designed by Renzo Piano.",
+      "visitorAppeal": "Free events, green spaces, sea views, family-friendly.",
+      "accessibility": "Good; bus or taxi from city center, near Piraeus.",
+      "bestTimeToVisit": "Summer (June-August) for outdoor events.",
+      "estimatedVisitDuration": "2-3 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Roman Agora",
+      "location": {
+        "city": "Athens",
+        "country": "Greece"
+      },
+      "type": "Historical",
+      "description": "A smaller ancient marketplace with the Tower of the Winds.",
+      "visitorAppeal": "Historical significance, compact site, near Monastiraki.",
+      "accessibility": "Excellent; metro (Monastiraki), walkable from Plaka.",
+      "bestTimeToVisit": "Spring (April-May) for mild weather.",
+      "estimatedVisitDuration": "1-1.5 hours",
+      "touristClassification": "Niche"
+    },
+    {
+      "name": "Panathenaic Stadium",
+      "location": {
+        "city": "Athens",
+        "country": "Greece"
+      },
+      "type": "Historical",
+      "description": "A marble stadium rebuilt for the first modern Olympics in 1896.",
+      "visitorAppeal": "Historical significance, audio tours, scenic setting near National Garden.",
+      "accessibility": "Excellent; metro (Acropoli), walkable from city center.",
+      "bestTimeToVisit": "Spring (April-May) for mild weather.",
+      "estimatedVisitDuration": "1-1.5 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Kolonaki District",
+      "location": {
+        "city": "Athens",
+        "country": "Greece"
+      },
+      "type": "Cultural",
+      "description": "An upscale neighborhood with chic cafes, boutiques, and museums.",
+      "visitorAppeal": "Trendy vibe, proximity to Benaki Museum, relaxed atmosphere.",
+      "accessibility": "Excellent; metro (Evangelismos), walkable from Syntagma.",
+      "bestTimeToVisit": "Evening for dining and nightlife.",
+      "estimatedVisitDuration": "2-3 hours",
+      "touristClassification": "Niche"
+    },
+    {
+      "name": "Cape Sounion",
+      "location": {
+        "city": "Athens",
+        "country": "Greece"
+      },
+      "type": "Historical/Natural",
+      "description": "A coastal site with the Temple of Poseidon overlooking the Aegean Sea.",
+      "visitorAppeal": "Stunning sunset views, ancient ruins, day trip from Athens.",
+      "accessibility": "Moderate; bus or car from Athens (1-hour drive).",
+      "bestTimeToVisit": "Evening for sunsets, Spring (April-May) for mild weather.",
+      "estimatedVisitDuration": "2-3 hours",
+      "touristClassification": "Recommended"
+    },
+
+    {
+      "name": "Alhambra",
+      "location": {
+        "city": "Granada",
+        "country": "Spain"
+      },
+      "type": "Historical/Cultural",
+      "description": "A 13th-century Islamic palace and fortress, showcasing Moorish architecture and intricate tilework.",
+      "visitorAppeal": "UNESCO World Heritage Site, Patio of the Lions, Generalife gardens, stunning views of Granada.",
+      "accessibility": "Moderate; bus or taxi from Granada center, near Málaga Airport (1.5-hour drive).",
+      "bestTimeToVisit": "Spring (April-May) or Fall (September-October) for pleasant weather.",
+      "estimatedVisitDuration": "3-4 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Generalife",
+      "location": {
+        "city": "Granada",
+        "country": "Spain"
+      },
+      "type": "Historical/Natural",
+      "description": "The summer palace and gardens of the Alhambra, known for their lush greenery and water features.",
+      "visitorAppeal": "UNESCO World Heritage Site, serene gardens, Moorish architecture, Alhambra proximity.",
+      "accessibility": "Moderate; included in Alhambra ticket, bus or taxi from Granada center.",
+      "bestTimeToVisit": "Spring (April-May) for blooming gardens.",
+      "estimatedVisitDuration": "1-2 hours",
+      "touristClassification": "Highly Recommended"
+    },
+    {
+      "name": "Granada Cathedral",
+      "location": {
+        "city": "Granada",
+        "country": "Spain"
+      },
+      "type": "Religious",
+      "description": "A Renaissance cathedral with a grand interior and ornate chapels.",
+      "visitorAppeal": "Royal Chapel with Catholic Monarchs’ tombs, central location, historical significance.",
+      "accessibility": "Excellent; walkable from Granada city center, bus nearby.",
+      "bestTimeToVisit": "Year-round, but morning for quieter visits.",
+      "estimatedVisitDuration": "1-1.5 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Royal Chapel",
+      "location": {
+        "city": "Granada",
+        "country": "Spain"
+      },
+      "type": "Historical/Religious",
+      "description": "A Gothic chapel housing the tombs of Ferdinand and Isabella, the Catholic Monarchs.",
+      "visitorAppeal": "Historical significance, ornate altarpiece, near Granada Cathedral.",
+      "accessibility": "Excellent; walkable from city center, central location.",
+      "bestTimeToVisit": "Spring (April-May) for mild weather.",
+      "estimatedVisitDuration": "1-1.5 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Albaicín District",
+      "location": {
+        "city": "Granada",
+        "country": "Spain"
+      },
+      "type": "Cultural",
+      "description": "A historic Muslim quarter with narrow streets and whitewashed houses.",
+      "visitorAppeal": "UNESCO World Heritage Site, Mirador de San Nicolás, authentic Andalusian vibe.",
+      "accessibility": "Good; bus or walk from city center, hilly terrain.",
+      "bestTimeToVisit": "Evening for sunset views from miradors.",
+      "estimatedVisitDuration": "2-3 hours",
+      "touristClassification": "Highly Recommended"
+    },
+    {
+      "name": "Mirador de San Nicolás",
+      "location": {
+        "city": "Granada",
+        "country": "Spain"
+      },
+      "type": "Natural",
+      "description": "A viewpoint in Albaicín offering stunning views of the Alhambra and Sierra Nevada.",
+      "visitorAppeal": "Iconic sunset spot, lively atmosphere, nearby cafes and flamenco shows.",
+      "accessibility": "Good; bus or walk from city center, steep climb in Albaicín.",
+      "bestTimeToVisit": "Evening for sunset views.",
+      "estimatedVisitDuration": "0.5-1 hour",
+      "touristClassification": "Must-Visit"
+    },
+    {
+      "name": "Sacromonte District",
+      "location": {
+        "city": "Granada",
+        "country": "Spain"
+      },
+      "type": "Cultural",
+      "description": "A historic Gypsy neighborhood known for cave houses and flamenco culture.",
+      "visitorAppeal": "Flamenco shows in caves, Sacromonte Abbey, unique cultural heritage.",
+      "accessibility": "Moderate; bus or taxi from city center, hilly terrain.",
+      "bestTimeToVisit": "Evening for flamenco performances.",
+      "estimatedVisitDuration": "2-3 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Sacromonte Caves Museum",
+      "location": {
+        "city": "Granada",
+        "country": "Spain"
+      },
+      "type": "Cultural",
+      "description": "A museum showcasing the history and lifestyle of Granada’s cave dwellers.",
+      "visitorAppeal": "Authentic cave houses, cultural exhibits, scenic Sacromonte setting.",
+      "accessibility": "Moderate; bus or taxi to Sacromonte, hilly terrain.",
+      "bestTimeToVisit": "Spring (April-May) for mild weather.",
+      "estimatedVisitDuration": "1-1.5 hours",
+      "touristClassification": "Niche"
+    },
+    {
+      "name": "Carrera del Darro",
+      "location": {
+        "city": "Granada",
+        "country": "Spain"
+      },
+      "type": "Cultural",
+      "description": "A picturesque street along the Darro River, lined with historic buildings.",
+      "visitorAppeal": "Romantic ambiance, views of Alhambra, proximity to Albaicín and Plaza Nueva.",
+      "accessibility": "Excellent; walkable from city center, near bus stops.",
+      "bestTimeToVisit": "Evening for scenic walks.",
+      "estimatedVisitDuration": "1-2 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "El Bañuelo",
+      "location": {
+        "city": "Granada",
+        "country": "Spain"
+      },
+      "type": "Historical",
+      "description": "An 11th-century Arab bathhouse, one of the best-preserved in Spain.",
+      "visitorAppeal": "Moorish architecture, historical insights, compact site in Albaicín.",
+      "accessibility": "Good; walkable from Carrera del Darro, central location.",
+      "bestTimeToVisit": "Year-round, but morning for quieter visits.",
+      "estimatedVisitDuration": "0.5-1 hour",
+      "touristClassification": "Niche"
+    },
+    {
+      "name": "Plaza Nueva",
+      "location": {
+        "city": "Granada",
+        "country": "Spain"
+      },
+      "type": "Cultural",
+      "description": "A lively square at the base of Albaicín, with cafes and historical buildings.",
+      "visitorAppeal": "Central location, vibrant atmosphere, proximity to Alhambra and cathedral.",
+      "accessibility": "Excellent; walkable from city center, bus nearby.",
+      "bestTimeToVisit": "Evening for dining and ambiance.",
+      "estimatedVisitDuration": "1-2 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Monastery of San Jerónimo",
+      "location": {
+        "city": "Granada",
+        "country": "Spain"
+      },
+      "type": "Religious",
+      "description": "A Renaissance monastery with an ornate church and cloister.",
+      "visitorAppeal": "Historical significance, intricate architecture, quieter than major sites.",
+      "accessibility": "Good; walkable from city center, near bus stops.",
+      "bestTimeToVisit": "Year-round, but morning for peaceful visits.",
+      "estimatedVisitDuration": "1-1.5 hours",
+      "touristClassification": "Niche"
+    },
+    {
+      "name": "Corral del Carbón",
+      "location": {
+        "city": "Granada",
+        "country": "Spain"
+      },
+      "type": "Historical",
+      "description": "A 14th-century caravanserai, the only fully preserved one in Spain.",
+      "visitorAppeal": "Moorish architecture, cultural events, central location near cathedral.",
+      "accessibility": "Excellent; walkable from Plaza Nueva, central location.",
+      "bestTimeToVisit": "Year-round, but check for cultural performances.",
+      "estimatedVisitDuration": "0.5-1 hour",
+      "touristClassification": "Niche"
+    },
+    {
+      "name": "Science Park (Parque de las Ciencias)",
+      "location": {
+        "city": "Granada",
+        "country": "Spain"
+      },
+      "type": "Cultural",
+      "description": "An interactive science museum with exhibits on astronomy, biology, and technology.",
+      "visitorAppeal": "Family-friendly, planetarium, outdoor experiments, modern facilities.",
+      "accessibility": "Good; bus or taxi from city center, south of Granada.",
+      "bestTimeToVisit": "Year-round, but weekends for family visits.",
+      "estimatedVisitDuration": "2-3 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Paseo de los Tristes",
+      "location": {
+        "city": "Granada",
+        "country": "Spain"
+      },
+      "type": "Cultural",
+      "description": "A scenic promenade along the Darro River with views of the Alhambra.",
+      "visitorAppeal": "Romantic setting, riverside cafes, proximity to Albaicín.",
+      "accessibility": "Excellent; walkable from Plaza Nueva, central location.",
+      "bestTimeToVisit": "Evening for ambiance and lights.",
+      "estimatedVisitDuration": "1-2 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Carmen de los Mártires",
+      "location": {
+        "city": "Granada",
+        "country": "Spain"
+      },
+      "type": "Natural",
+      "description": "A romantic garden with ponds, peacocks, and views of the Alhambra.",
+      "visitorAppeal": "Tranquil setting, free entry, near Alhambra grounds.",
+      "accessibility": "Moderate; walk or bus from city center, near Alhambra.",
+      "bestTimeToVisit": "Spring (April-May) for blooming gardens.",
+      "estimatedVisitDuration": "1-2 hours",
+      "touristClassification": "Niche"
+    },
+    {
+      "name": "Basilica of San Juan de Dios",
+      "location": {
+        "city": "Granada",
+        "country": "Spain"
+      },
+      "type": "Religious",
+      "description": "A Baroque church with a lavish gold-decorated interior.",
+      "visitorAppeal": "Stunning decor, historical significance, central location.",
+      "accessibility": "Excellent; walkable from city center, near cathedral.",
+      "bestTimeToVisit": "Year-round, but morning for quieter visits.",
+      "estimatedVisitDuration": "0.5-1 hour",
+      "touristClassification": "Niche"
+    },
+    {
+      "name": "Huerta de San Vicente",
+      "location": {
+        "city": "Granada",
+        "country": "Spain"
+      },
+      "type": "Cultural",
+      "description": "The summer home of poet Federico García Lorca, now a museum.",
+      "visitorAppeal": "Literary history, intimate setting, cultural exhibits.",
+      "accessibility": "Good; bus or walk from city center, south of Granada.",
+      "bestTimeToVisit": "Year-round, but check for guided tours.",
+      "estimatedVisitDuration": "1-1.5 hours",
+      "touristClassification": "Niche"
+    },
+    {
+      "name": "Plaza de Bib-Rambla",
+      "location": {
+        "city": "Granada",
+        "country": "Spain"
+      },
+      "type": "Cultural",
+      "description": "A historic square with cafes and a central fountain, known for its lively atmosphere.",
+      "visitorAppeal": "Local vibe, nearby shops, proximity to cathedral.",
+      "accessibility": "Excellent; walkable from city center, central location.",
+      "bestTimeToVisit": "Evening for dining and ambiance.",
+      "estimatedVisitDuration": "1-2 hours",
+      "touristClassification": "Recommended"
+    },
+    {
+      "name": "Monastery of La Cartuja",
+      "location": {
+        "city": "Granada",
+        "country": "Spain"
+      },
+      "type": "Religious",
+      "description": "A Baroque monastery with an ornate sacristy and cloister.",
+      "visitorAppeal": "Architectural beauty, historical significance, quieter than major sites.",
+      "accessibility": "Good; bus or taxi from city center, north of Granada.",
+      "bestTimeToVisit": "Year-round, but morning for peaceful visits.",
+      "estimatedVisitDuration": "1-1.5 hours",
+      "touristClassification": "Niche"
+    }
+  ]
+}

@@ -33,41 +33,27 @@ SCORE_LABELS = {
 }
 
 def get_available_cities():
-    # Obtiene las ciudades únicas del archivo JSON
+    # Obtiene las ciudades únicas desde ChromaDB
     try:
-        # Buscar el archivo places.json en diferentes ubicaciones posibles
-        possible_paths = [
-            "places.json",
-            "src/places.json",
-            os.path.join(os.path.dirname(__file__), "places.json"),
-            os.path.join(os.path.dirname(__file__), "..", "places.json")
-        ]
+        import chromadb
+        from RAG.rag import RAGPlanner
         
-        places_data = None
-        for path in possible_paths:
-            if os.path.exists(path):
-                with open(path, 'r', encoding='utf-8') as f:
-                    places_data = json.load(f)
-                break
+        # Inicializar RAG para obtener ciudades disponibles
+        rag_planner = RAGPlanner()
         
-        if not places_data:
-            st.error("No se pudo encontrar el archivo places.json")
-            return []
-        
-        # Extraer ciudades únicas de los sitios turísticos
+        # Extraer ciudades únicas de los lugares cargados
         cities = set()
-        tourist_sites = places_data.get('touristSites', [])
-        
-        for site in tourist_sites:
-            location = site.get('location', {})
+        for place in rag_planner.places_data:
+            location = place.get('location', {})
             city = location.get('city', '')
-            if city:
+            if city and city != 'Unknown':
                 cities.add(city)
         
         return sorted(list(cities))
         
     except Exception as e:
-        st.warning(f"No se pudieron cargar las ciudades desde el archivo JSON: {e}")
+        st.warning(f"No se pudieron cargar las ciudades desde ChromaDB: {e}")
+        st.error("Asegúrate de que ChromaDB esté poblado ejecutando: python src/populate_chroma.py")
         return []
 
 def geocode_address(address, city):
@@ -88,7 +74,8 @@ def app():
     # Selección de ciudad dinámica
     cities = get_available_cities()
     if not cities:
-        st.error("No hay ciudades disponibles en el archivo de datos.")
+        st.error("No hay ciudades disponibles en ChromaDB. Por favor, ejecuta el crawler primero.")
+        st.info("Ejecuta: `python src/populate_chroma.py` para poblar la base de datos.")
         return
     city = st.selectbox("¿A qué ciudad viajas?", cities)
 
@@ -181,8 +168,12 @@ def app():
                 with st.spinner("Procesando recomendaciones..."):
                     try:
                         # Initialize RAG planner (API keys loaded from .env)
-                        rag_planner = RAGPlanner()
-                        rag_data = rag_planner.process_user_request(user_preferences, lat, lon)
+                        rag_planner = RAGPlanner(chroma_db_path="db/")
+                        
+                        # Determine transport mode for processing
+                        transport_mode = selected_transport[0] if selected_transport else "A pie"
+                        
+                        rag_data = rag_planner.process_user_request(user_preferences, lat, lon, transport_mode)
                     except ValueError as e:
                         st.error(f"Error de configuración: {e}")
                         st.error("Por favor, configura las API keys en tu archivo .env:")
@@ -197,7 +188,9 @@ OPENROUTESERVICE_API_KEY=tu_ors_key
                         return
                 
                 if rag_data['filtered_places']:
+                    data_source = rag_data.get('data_source', 'Unknown')
                     st.success(f"¡Encontradas {len(rag_data['filtered_places'])} recomendaciones!")
+                    st.info(f"📊 Fuente de datos: {data_source}")
                     
                     # Display LLM time estimates
                     if rag_data.get('llm_time_estimates'):
@@ -217,22 +210,22 @@ OPENROUTESERVICE_API_KEY=tu_ors_key
                             st.write(f"**Duración estimada original:** {place.get('estimatedVisitDuration', 'No especificada')}")
                             st.write(f"**Tiempo recomendado por LLM:** {time_estimate} horas")
                     
-                    # Display distance matrix info
-                    if rag_data['distance_matrix'].size > 0:
-                        st.markdown("### 🚗 Matriz de distancias (Adyacencia):")
+                    # Display time matrix info
+                    if rag_data['time_matrix'].size > 0:
+                        st.markdown("### 🚗 Matriz de tiempos de viaje:")
                         st.write(f"Matriz de tiempos de viaje calculada para {len(rag_data['filtered_places'])} lugares")
                         st.write("(Tiempos en minutos desde tu ubicación)")
                         
                         # Show travel times from user location to each place
-                        if len(rag_data['distance_matrix']) > 1:
-                            travel_times = rag_data['distance_matrix'][0][1:]  # First row, excluding user-to-user
+                        if len(rag_data['time_matrix']) > 1:
+                            travel_times = rag_data['time_matrix'][0][1:]  # First row, excluding user-to-user
                             for i, (place, time_minutes) in enumerate(zip(rag_data['filtered_places'], travel_times)):
                                 st.write(f"- {place['name']}: {time_minutes:.1f} minutos")
                         
-                        # Show full distance matrix
-                        with st.expander("Ver matriz completa de distancias"):
-                            st.write("Matriz de adyacencia (tiempos en minutos):")
-                            st.dataframe(rag_data['distance_matrix'])
+                        # Show full time matrix
+                        with st.expander("Ver matriz completa de tiempos"):
+                            st.write("Matriz de tiempos de viaje (en minutos):")
+                            st.dataframe(rag_data['time_matrix'])
                     
                     # Display embeddings info
                     st.markdown("### 🧠 Información de Embeddings:")
@@ -248,7 +241,7 @@ OPENROUTESERVICE_API_KEY=tu_ors_key
                     with st.expander("Datos para Metaheurística (avanzado)"):
                         st.write("**Datos disponibles para algoritmos de optimización:**")
                         st.write(f"- Lugares filtrados: {len(rag_data['filtered_places'])}")
-                        st.write(f"- Matriz de adyacencia: {rag_data['distance_matrix'].shape if hasattr(rag_data['distance_matrix'], 'shape') else 'N/A'}")
+                        st.write(f"- Matriz de tiempos: {rag_data['time_matrix'].shape if hasattr(rag_data['time_matrix'], 'shape') else 'N/A'}")
                         st.write(f"- Embeddings de lugares: {len(rag_data.get('place_embeddings', []))}")
                         st.write(f"- Embedding del usuario: {len(rag_data.get('user_embedding', []))}")
                         st.write(f"- Tiempos estimados por LLM: {len(rag_data.get('llm_time_estimates', []))}")

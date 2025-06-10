@@ -10,6 +10,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import logging
 import os
 from dotenv import load_dotenv
+import chromadb
 
 # Load environment variables from .env file
 load_dotenv()
@@ -19,20 +20,24 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class RAGPlanner:
-    def __init__(self, places_json_path: str = "places.json", model_name: str = "all-MiniLM-L6-v2"):
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2", chroma_db_path: str = "db/"):
         """
         Initialize the RAG Planner
         
         Args:
-            places_json_path: Path to the places JSON file
             model_name: Name of the sentence transformer model for embeddings
+            chroma_db_path: Path to ChromaDB database
         
         Raises:
             ValueError: If required API keys are not found in environment variables
+            RuntimeError: If ChromaDB is not available or has no data
         """
-        self.places_json_path = places_json_path
         self.model = SentenceTransformer(model_name)
-        self.places_data = self._load_places_data()
+        self.chroma_db_path = chroma_db_path
+        
+        # Initialize ChromaDB (required)
+        self._init_chromadb()
+        self.places_data = self._load_places_from_chroma()
         
         # Initialize geocoder for coordinate lookup
         self.geocoder = Nominatim(user_agent="tourist_guide_app")
@@ -55,20 +60,152 @@ class RAGPlanner:
                 "Please set it in your .env file or environment."
             )
         
-        logger.info("RAG Planner initialized with API keys successfully")
-        
-    def _load_places_data(self) -> List[Dict]:
-        """Load places data from JSON file"""
+        logger.info("RAG Planner initialized with API keys successfully. Using ChromaDB as data source.")
+    
+    def _init_chromadb(self):
+        """Initialize ChromaDB client and collection"""
         try:
-            with open(self.places_json_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                return data.get('touristSites', [])
-        except FileNotFoundError:
-            logger.error(f"Places file not found: {self.places_json_path}")
-            return []
-        except json.JSONDecodeError:
-            logger.error(f"Invalid JSON in places file: {self.places_json_path}")
-            return []
+            self.chroma_client = chromadb.PersistentClient(path=self.chroma_db_path)
+            self.chroma_collection = self.chroma_client.get_or_create_collection(name="tourism_docs")
+            logger.info(f"ChromaDB initialized successfully. Collection has {self.chroma_collection.count()} documents.")
+        except Exception as e:
+            logger.error(f"Failed to initialize ChromaDB: {e}")
+            raise RuntimeError(f"ChromaDB initialization failed: {e}")
+    
+    def _load_places_from_chroma(self) -> List[Dict]:
+        """Load places data from ChromaDB and convert to places format"""
+        try:
+            # Get all documents from ChromaDB
+            all_docs = self.chroma_collection.get(include=["metadatas", "documents"])
+            
+            if not all_docs["documents"]:
+                raise RuntimeError("No documents found in ChromaDB. Please run the crawler first to populate the database.")
+            
+            # Convert ChromaDB documents to places format
+            places_data = []
+            processed_urls = set()  # To avoid duplicates from chunks
+            
+            for i, (doc_text, metadata) in enumerate(zip(all_docs["documents"], all_docs["metadatas"])):
+                source_url = metadata.get("source_url", "")
+                
+                # Skip if we've already processed this URL (avoid duplicates from chunks)
+                if source_url in processed_urls:
+                    continue
+                processed_urls.add(source_url)
+                
+                # Extract location information from named entities
+                named_entities = metadata.get("named_entities", "")
+                location_info = self._extract_location_from_entities(named_entities)
+                
+                # Create place object from ChromaDB document
+                place = {
+                    "name": self._extract_place_name(doc_text, source_url),
+                    "type": "tourist_site",  # Default type
+                    "description": doc_text[:500] + "..." if len(doc_text) > 500 else doc_text,
+                    "visitorAppeal": self._extract_visitor_appeal(doc_text),
+                    "touristClassification": self._classify_tourist_site(doc_text, named_entities),
+                    "bestTimeToVisit": "Year-round",  # Default
+                    "estimatedVisitDuration": "2 hours",  # Default
+                    "location": location_info,
+                    "source_url": source_url,
+                    "named_entities": named_entities,
+                    "chroma_doc_id": all_docs["ids"][i] if i < len(all_docs["ids"]) else None
+                }
+                
+                places_data.append(place)
+            
+            logger.info(f"Loaded {len(places_data)} places from ChromaDB")
+            return places_data
+            
+        except Exception as e:
+            logger.error(f"Failed to load places from ChromaDB: {e}")
+            raise RuntimeError(f"ChromaDB is required but failed to load data: {e}")
+    
+    def _extract_location_from_entities(self, named_entities: str) -> Dict:
+        """Extract location information from named entities string"""
+        location = {"city": "Unknown", "country": "Spain"}  # Default
+        
+        if not named_entities:
+            return location
+        
+        # Parse named entities (format: "GPE:Madrid, ORG:Museum, GPE:Spain")
+        entities = named_entities.split(", ")
+        cities = []
+        countries = []
+        
+        for entity in entities:
+            if ":" in entity:
+                entity_type, entity_text = entity.split(":", 1)
+                if entity_type == "GPE":  # Geopolitical entity
+                    if entity_text.lower() in ["spain", "españa", "spanish"]:
+                        countries.append(entity_text)
+                    else:
+                        cities.append(entity_text)
+        
+        # Use the first city and country found
+        if cities:
+            location["city"] = cities[0]
+        if countries:
+            location["country"] = countries[0]
+        
+        return location
+    
+    def _extract_place_name(self, doc_text: str, source_url: str) -> str:
+        """Extract a meaningful place name from document text or URL"""
+        # Try to extract from the first sentence or title-like text
+        sentences = doc_text.split('. ')
+        if sentences:
+            first_sentence = sentences[0].strip()
+            # Look for patterns like "Name: Something" or just use first few words
+            if len(first_sentence) < 100:
+                return first_sentence
+        
+        # Fallback to extracting from URL
+        if source_url:
+            url_parts = source_url.split('/')
+            for part in reversed(url_parts):
+                if part and part not in ['www', 'http:', 'https:', '']:
+                    return part.replace('-', ' ').replace('_', ' ').title()
+        
+        return "Tourist Site"  # Final fallback
+    
+    def _extract_visitor_appeal(self, doc_text: str) -> str:
+        """Extract visitor appeal information from document text"""
+        # Look for keywords that indicate visitor appeal
+        appeal_keywords = [
+            "beautiful", "stunning", "magnificent", "historic", "cultural",
+            "popular", "famous", "attraction", "must-see", "recommended",
+            "experience", "visit", "explore", "discover"
+        ]
+        
+        doc_lower = doc_text.lower()
+        found_appeals = [keyword for keyword in appeal_keywords if keyword in doc_lower]
+        
+        if found_appeals:
+            return f"Features {', '.join(found_appeals[:3])}"
+        
+        return "Interesting tourist destination"
+    
+    def _classify_tourist_site(self, doc_text: str, named_entities: str) -> str:
+        """Classify the type of tourist site based on content"""
+        doc_lower = doc_text.lower()
+        entities_lower = named_entities.lower()
+        
+        # Classification keywords
+        classifications = {
+            "museum": ["museum", "gallery", "exhibition", "art", "collection"],
+            "historical": ["historic", "history", "ancient", "heritage", "monument"],
+            "cultural": ["culture", "cultural", "tradition", "festival", "event"],
+            "natural": ["park", "nature", "garden", "landscape", "natural"],
+            "religious": ["church", "cathedral", "temple", "religious", "sacred"],
+            "entertainment": ["entertainment", "show", "theater", "cinema", "fun"]
+        }
+        
+        for classification, keywords in classifications.items():
+            if any(keyword in doc_lower or keyword in entities_lower for keyword in keywords):
+                return classification
+        
+        return "general"
     
     def _get_coordinates_from_city(self, city_name: str) -> Tuple[Optional[float], Optional[float]]:
         """
@@ -351,6 +488,108 @@ class RAGPlanner:
         """Filter places by city"""
         return [place for place in places if place['location']['city'].lower() == target_city.lower()]
     
+    def _semantic_search_chroma(self, query: str, n_results: int = 20) -> List[Dict]:
+        """
+        Perform semantic search in ChromaDB using user preferences
+        
+        Args:
+            query: Search query based on user preferences
+            n_results: Number of results to return
+            
+        Returns:
+            List of places from semantic search results
+        """
+        try:
+            # Perform semantic search in ChromaDB
+            search_results = self.chroma_collection.query(
+                query_texts=[query],
+                n_results=n_results,
+                include=["metadatas", "documents", "distances"]
+            )
+            
+            if not search_results["documents"] or not search_results["documents"][0]:
+                logger.warning("No semantic search results found in ChromaDB")
+                return []
+            
+            # Convert search results to places format
+            places_data = []
+            processed_urls = set()
+            
+            for i, (doc_text, metadata, distance) in enumerate(zip(
+                search_results["documents"][0], 
+                search_results["metadatas"][0],
+                search_results["distances"][0]
+            )):
+                source_url = metadata.get("source_url", "")
+                
+                # Skip duplicates from chunks
+                if source_url in processed_urls:
+                    continue
+                processed_urls.add(source_url)
+                
+                # Extract location information
+                named_entities = metadata.get("named_entities", "")
+                location_info = self._extract_location_from_entities(named_entities)
+                
+                # Create place object
+                place = {
+                    "name": self._extract_place_name(doc_text, source_url),
+                    "type": "tourist_site",
+                    "description": doc_text[:500] + "..." if len(doc_text) > 500 else doc_text,
+                    "visitorAppeal": self._extract_visitor_appeal(doc_text),
+                    "touristClassification": self._classify_tourist_site(doc_text, named_entities),
+                    "bestTimeToVisit": "Year-round",
+                    "estimatedVisitDuration": "2 hours",
+                    "location": location_info,
+                    "source_url": source_url,
+                    "named_entities": named_entities,
+                    "semantic_distance": distance,
+                    "chroma_doc_id": search_results["ids"][0][i] if i < len(search_results["ids"][0]) else None
+                }
+                
+                places_data.append(place)
+            
+            logger.info(f"Semantic search returned {len(places_data)} unique places")
+            return places_data
+            
+        except Exception as e:
+            logger.error(f"Error performing semantic search in ChromaDB: {e}")
+            return []
+    
+    def _create_search_query_from_preferences(self, user_preferences: Dict) -> str:
+        """
+        Create a search query string from user preferences for semantic search
+        
+        Args:
+            user_preferences: User preferences dictionary
+            
+        Returns:
+            Search query string
+        """
+        query_parts = []
+        
+        # Add city information
+        if 'city' in user_preferences:
+            query_parts.append(f"tourist attractions in {user_preferences['city']}")
+        
+        # Add high-interest categories (score >= 4)
+        if 'category_interest' in user_preferences:
+            high_interest_categories = [
+                category for category, score in user_preferences['category_interest'].items() 
+                if score >= 4
+            ]
+            if high_interest_categories:
+                query_parts.append(f"interested in {', '.join(high_interest_categories)}")
+        
+        # Add user notes
+        if 'user_notes' in user_preferences and user_preferences['user_notes']:
+            query_parts.append(user_preferences['user_notes'])
+        
+        # Create final query
+        search_query = ". ".join(query_parts)
+        logger.info(f"Created search query: {search_query}")
+        return search_query
+    
     def _calculate_cosine_similarity(self, user_embedding: np.ndarray, place_embeddings: List[np.ndarray]) -> List[float]:
         """
         Calculate cosine similarity between user embedding and place embeddings
@@ -526,12 +765,32 @@ class RAGPlanner:
         Raises:
             RuntimeError: If API calls fail (no fallbacks)
         """
-        # Filter places by city first
-        city = user_preferences.get('city', '')
-        city_places = self._filter_places_by_city(self.places_data, city)
+        # Use semantic search for place discovery
+        logger.info("Using ChromaDB semantic search for place discovery")
+        
+        # Create search query from user preferences
+        search_query = self._create_search_query_from_preferences(user_preferences)
+        
+        # Perform semantic search
+        semantic_places = self._semantic_search_chroma(search_query, n_results=50)
+        
+        if semantic_places:
+            # Filter semantic results by city
+            city = user_preferences.get('city', '')
+            city_places = self._filter_places_by_city(semantic_places, city)
+            
+            if not city_places:
+                logger.warning(f"No semantic search results found for city: {city}. Using all available places.")
+                city_places = self._filter_places_by_city(self.places_data, city)
+            else:
+                logger.info(f"Found {len(city_places)} places from semantic search for city: {city}")
+        else:
+            logger.warning("Semantic search returned no results. Using all available places.")
+            city = user_preferences.get('city', '')
+            city_places = self._filter_places_by_city(self.places_data, city)
         
         if not city_places:
-            raise RuntimeError(f"No places found for city: {city}")
+            raise RuntimeError(f"No places found for city: {user_preferences.get('city', 'Unknown')}")
         
         # Filter places by maximum distance
         max_distance_km = user_preferences.get('max_distance', 10)
@@ -550,9 +809,11 @@ class RAGPlanner:
         logger.info("Generating user embedding...")
         user_embedding = self._generate_user_embedding(user_preferences)
         
-        # Filter places by cosine similarity with threshold 0.3
+        # Filter places by cosine similarity with threshold
         logger.info("Filtering places by cosine similarity...")
-        similarity_threshold = user_preferences.get('similarity_threshold', 0.3)
+        similarity_threshold = user_preferences.get('similarity_threshold', 0.2)
+        logger.info(f"Using similarity threshold: {similarity_threshold}")
+        
         filtered_places, place_embeddings, similarity_scores = self._filter_places_by_similarity(
             distance_filtered_places, distance_place_embeddings, user_embedding, similarity_threshold
         )
@@ -572,7 +833,7 @@ class RAGPlanner:
         # Parse LLM response to get time estimates
         llm_time_estimates = self._parse_llm_time_estimates(llm_response, filtered_places)
         
-        logger.info(f"RAG processing complete. Found {len(filtered_places)} places after distance and similarity filtering.")
+        logger.info(f"RAG processing complete using ChromaDB semantic search. Found {len(filtered_places)} places after filtering.")
         
         return {
             'filtered_places': filtered_places,
@@ -583,7 +844,8 @@ class RAGPlanner:
             'llm_response': llm_response,
             'similarity_scores': similarity_scores,
             'user_preferences': user_preferences,
-            'transport_mode': transport_mode
+            'transport_mode': transport_mode,
+            'data_source': "ChromaDB semantic search"
         }
     
     def _get_llm_recommendation_prompt(self, places: List[Dict], user_preferences: Dict) -> str:

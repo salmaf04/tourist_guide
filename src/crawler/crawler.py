@@ -67,31 +67,45 @@ class NLTKManager:
         processed_data = NLTKProcessedData(lemmatized_tokens=[], named_entities=[])
         
         try:
-            # Tokenización y limpieza
-            words = word_tokenize(text.lower(), language=self.language)
+            # Tokenización para lematización (en minúsculas)
+            words_lower = word_tokenize(text.lower(), language=self.language)
             stop_words_set = set(stopwords.words(self.language))
-            filtered_words = [w for w in words if w.isalnum() and w not in stop_words_set]
+            filtered_words = [w for w in words_lower if w.isalnum() and w not in stop_words_set]
             
             # Lematización
             lemmatizer = WordNetLemmatizer()
             processed_data.lemmatized_tokens = [lemmatizer.lemmatize(w) for w in filtered_words]
             
-            # Extracción de entidades
-            pos_tags = nltk.pos_tag(processed_data.lemmatized_tokens)
-            tree = nltk.ne_chunk(pos_tags)
+            # Extracción manual de ciudades conocidas (método principal)
+            processed_data.named_entities.extend(self._extract_known_cities(text))
             
-            for i in tree:
-                if isinstance(i, nltk.tree.Tree):
-                    entity_label = i.label()
-                    entity_string = " ".join([token for token, pos in i.leaves()])
-                    processed_data.named_entities.append({
-                        "label": entity_label, 
-                        "text": entity_string
-                    })
+            # Intentar extracción con NLTK si está disponible
+            try:
+                # Tokenizar el texto original manteniendo capitalización
+                original_words = word_tokenize(text, language=self.language)
+                
+                # Filtrar solo palabras alfanuméricas pero mantener capitalización
+                filtered_original = [w for w in original_words if w.isalnum()]
+                
+                if filtered_original:
+                    # POS tagging con texto original
+                    pos_tags = nltk.pos_tag(filtered_original)
+                    tree = nltk.ne_chunk(pos_tags)
                     
+                    for i in tree:
+                        if isinstance(i, nltk.tree.Tree):
+                            entity_label = i.label()
+                            entity_string = " ".join([token for token, pos in i.leaves()])
+                            processed_data.named_entities.append({
+                                "label": entity_label, 
+                                "text": entity_string
+                            })
+            except Exception as nltk_error:
+                print(f"NLTK NER failed, using manual extraction only: {nltk_error}")
+            
             # Eliminar duplicados
             unique_entities = {
-                (entity['label'], entity['text']): entity 
+                (entity['label'], entity['text'].lower()): entity 
                 for entity in processed_data.named_entities
                 if entity['label'] in ['GPE', 'ORG', 'PERSON']
             }
@@ -99,10 +113,47 @@ class NLTKManager:
             processed_data.named_entities = list(unique_entities.values())
             
         except Exception as e:
-            print(f"Error during NLTK processing: {e}")
-            traceback.print_exc()
+            print(f"Error during text processing: {e}")
+            # Fallback: solo extracción manual de ciudades
+            processed_data.named_entities = self._extract_known_cities(text)
             
         return processed_data
+    
+    def _extract_known_cities(self, text: str) -> List[Dict[str, str]]:
+        """
+        Extrae ciudades conocidas de España usando patrones específicos
+        """
+        # Lista de ciudades españolas importantes
+        spanish_cities = [
+            'Madrid', 'Barcelona', 'Valencia', 'Sevilla', 'Seville', 'Zaragoza',
+            'Málaga', 'Malaga', 'Murcia', 'Palma', 'Las Palmas', 'Bilbao',
+            'Alicante', 'Córdoba', 'Cordoba', 'Valladolid', 'Vigo', 'Gijón',
+            'Hospitalet', 'Vitoria', 'Granada', 'Elche', 'Oviedo', 'Badalona',
+            'Cartagena', 'Terrassa', 'Jerez', 'Sabadell', 'Móstoles', 'Alcalá',
+            'Pamplona', 'Fuenlabrada', 'Almería', 'Leganés', 'Santander',
+            'Burgos', 'Castellón', 'Getafe', 'Albacete', 'Alcorcón', 'Logroño',
+            'Badajoz', 'Salamanca', 'Huelva', 'Marbella', 'Lleida', 'Tarragona',
+            'León', 'Cadiz', 'Cádiz', 'Dos Hermanas', 'Parla', 'Torrejón',
+            'Mataró', 'Santa Coloma', 'Algeciras', 'Jaén', 'Ourense', 'Reus',
+            'Telde', 'Barakaldo', 'Lugo', 'Santiago', 'Girona', 'Cáceres',
+            'Lorca', 'Coslada', 'Talavera', 'El Puerto', 'Cornellà', 'Avilés',
+            'Palencia', 'Galdakao', 'Pontevedra', 'Pozuelo', 'Toledo', 'Ferrol',
+            'Ceuta', 'Melilla', 'Segovia', 'Cuenca', 'Ávila', 'Guadalajara',
+            'Soria', 'Teruel', 'Huesca', 'Zamora'
+        ]
+        
+        entities = []
+        text_upper = text.upper()
+        
+        for city in spanish_cities:
+            # Buscar la ciudad en el texto (case insensitive)
+            if city.upper() in text_upper:
+                entities.append({
+                    "label": "GPE",
+                    "text": city
+                })
+        
+        return entities
 
 class URLFilter:
     """Filtra URLs basado en robots.txt y otras reglas"""

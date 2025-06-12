@@ -66,23 +66,32 @@ class RouteFinder:
             new_route = self.perturb_route(route)
 
             # Calcula el valor de la función objetivo para la nueva ruta
-            new_value = self.goal_func(new_route, time, tourist_param, C)
+            new_value = self.goal_func(new_route, time, C)
 
             # Verifica si la nueva ruta es mejor que la mejor ruta encontrada hasta ahora
             if new_value > best_value:
                 best_route = new_route
                 best_value = new_value
 
-            # Aplica la función de aceptación de Metropolis
-            delta = new_value - self.goal_func(route, time, tourist_param)
-            if delta > 0 or random.random() < math.exp(delta / temperature):
+            # Funcion de Aceptación de Simulated Annealing
+            delta = new_value - self.goal_func(route, time)
+            if delta > 0 or random.random() < (temperature-self.ganma)/(self.beta-self.ganma)*math.exp(delta / temperature):
                 route = new_route
 
             
             # Enfría la temperatura
-            temperature *= 0.99
+            it=it+1
+            temperature = self.CoolingFunction(temperature,it)
 
-        return best_route
+        answer=[0] 
+        for i in range(1, len(best_route)):
+            if self.get_time(route, i+1) <= time:
+                answer.append(best_route[i])
+            else:
+                break
+        answer.append(0)
+
+        return answer
 
 
     def perturb_route(self, route):
@@ -105,7 +114,7 @@ class RouteFinder:
     def node_goal_func(self,node_id):
         return numpy.dot(self.node_params[node_id]['vector'], self.tourist_param)/(numpy.linalg.norm(self.node_params[node_id]['vector'])* numpy.linalg.norm(self.tourist_param))
 
-    def goal_func(self, route, time, tourist_param, C):
+    def goal_func(self, route, time, C):
         """
         Función objetivo que se maximiza.
 
@@ -148,15 +157,12 @@ class RouteFinder:
         t = 0
         for i in range(1, length):
             # Add travel time from previous node to current node
-            if route[i-1] < len(self.distance_matrix) and route[i] < len(self.distance_matrix[0]):
-                t += self.distance_matrix[route[i-1]][route[i]]
+            t += self.distance_matrix[route[i-1]][route[i]]
             
             # Add visit time at current node
-            if route[i] < len(self.node_params):
-                t += self.node_params[route[i]]['time']
+            t += self.node_params[route[i]]['time']
 
         # Add return time to starting point
-        if length > 1 and route[length-1] < len(self.distance_matrix) and route[0] < len(self.distance_matrix[0]):
-            t += self.distance_matrix[route[length-1]][route[0]]
+        t += self.distance_matrix[route[length-1]][route[0]]
  
         return t

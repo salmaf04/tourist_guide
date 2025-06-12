@@ -27,12 +27,12 @@ class RouteOptimizer:
 
     def get_routes(self):
         routes = []
-        for _ in range(0,3):
-            routes.append(self.RouteFinder.find_route(self.tourist_param, self.max_time,0))
-        for i in range(0,17):
+        for _ in range(0,8):
+            routes.append(self.RouteFinder.find_route(self.tourist_param, self.max_time, False))
+        for _ in range(0,12):
             paramcop=self.tourist_param.copy()
             c = np.random.normal(loc=1, scale=1, size=len(paramcop))
             paramcop*=c
-            route = self.RouteFinder.find_route(paramcop, self.max_time, i)
+            route = self.RouteFinder.find_route(paramcop, self.max_time, False)
             routes.append(route)
         return routes

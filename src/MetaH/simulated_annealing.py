@@ -17,10 +17,14 @@ class RouteFinder:
         self.distance_matrix = distance_matrix
         self.node_params = node_params
         self.num_nodes = len(distance_matrix)
-        self.num_cities = len(node_params)
+
+
+        self.alpha = 0.001 
+        self.beta = 10000 
+        self.ganma = 80
     
 
-    def find_route(self, tourist_param, time, starting_node):
+    def find_route(self, tourist_param, time, sort):
         """
         Encuentra una ruta que maximice la función goal_func(route) y cumpla con la restricción de tiempo.
 
@@ -31,14 +35,21 @@ class RouteFinder:
         :return: La ruta óptima encontrada.
         :rtype: list[int]
         """
+        
+        self.tourist_param=tourist_param
 
-        route = random.sample(range(self.num_cities), self.num_cities)
+        
+        C=[0]
+        route = []
+
+        for i in range (1,self.num_nodes):
+            route.append(i)
+            C.append(self.node_goal_function(i))
         #Haz que el starting_node sea el primero
-        route.remove(starting_node)
-        route.insert(0, starting_node)
+        route.insert(0, 0)
 
         # Inicializa la temperatura
-        temperature = 1000.0
+        temperature = self.beta
 
         # Inicializa la mejor ruta encontrada
         best_route = route
@@ -47,8 +58,10 @@ class RouteFinder:
         best_value = self.goal_func(route)
 
 
+        # Cantidad de iteraciones
+        it=0
         # Ciclo de enfriamiento simulado
-        while temperature > 1.0:
+        while temperature > self.ganma:
             # Genera una nueva solución vecina
             new_route = self.perturb_route(route)
 
@@ -62,11 +75,13 @@ class RouteFinder:
 
             # Aplica la función de aceptación de Metropolis
             delta = new_value - self.goal_func(route, time)
-            if delta > 0 or random.random() < math.exp(delta / temperature):
+            if delta > 0 or random.random() < (temperature-self.ganma)/(self.beta-self.ganma)*math.exp(delta / temperature):
                 route = new_route
 
+            
             # Enfría la temperatura
-            temperature *= 0.99
+            it=it+1
+            temperature = self.CoolingFunction(temperature,it)
 
         return best_route
 
@@ -77,12 +92,17 @@ class RouteFinder:
 
         # Intercambia dos nodos en la ruta
         i = random.randint(1, len(new_route) - 2)
-        j = random.randint(max(1,i-3), min(len(new_route) - 2),i+3)
+        j = random.randint(1, len(new_route) - 2)
         new_route[i], new_route[j] = new_route[j], new_route[i]
         return new_route
 
+    def cooling_function(self,T, it):
+        return T* math.exp(-self.alpha*it)
 
-    def goal_func(self, route, time):
+    def node_goal_func(self,node_id):
+        return numpy.dot(self.node_params[node_id]['vector'], self.tourist_param)/(numpy.linalg.norm(self.node_params[node_id]['vector'])* numpy.linalg.norm(self.tourist_param))
+
+    def goal_func(self, route, time, C):
         """
         Función objetivo que se maximiza.
 
@@ -101,7 +121,7 @@ class RouteFinder:
         sum=0
         for i in range(1,length):
             #Dot product entre los dos vectores
-            sum+=numpy.dot(self.node_params[i]['vector'], self.tourist_param)
+            sum+=C[i]
 
         return sum
 

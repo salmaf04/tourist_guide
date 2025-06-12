@@ -1,0 +1,10 @@
+Imagina que eres un turista en Madrid, te voy a hacer varias preguntas y me vas a devolver unicamente las respuestas
+en una línea separadas por comas. Las unicas respuestas posibles paralas 5 primeras preguntas son:
+1 - Absolutely hates it
+2 - 
+3 - Moderately interested in
+4 - Really enjoy it
+5 - Absolutely loves it
+Te gust la comida? 
+Te gusta la ingenieria? 
+Te gusta el arte?

@@ -12,7 +12,7 @@ class GeminiClient:
     """
     Cliente para interactuar con la API de Gemini.
     """
-    def __init__(self):
+    def __init__(self, temperature=0.7):
         # Configure Gemini API
         api_key = os.getenv('GEMINI_API_KEY')
         if not api_key:
@@ -21,7 +21,7 @@ class GeminiClient:
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel('gemini-2.0-flash')
         self.generation_config = {
-            'temperature': 0.7,
+            'temperature': temperature,
             'top_p': 1,
             'top_k': 32,
             'max_output_tokens': 2000,

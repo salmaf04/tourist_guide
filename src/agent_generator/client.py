@@ -7,13 +7,13 @@ class GeminiClient:
     """
     Cliente para interactuar con la API de Gemini.
     """
-    def __init__(self):
+    def __init__(self, temperature=0.9, max_tokens=200):
         self.model = genai.GenerativeModel('gemini-2.0-flash')
         self.generation_config = {
-            'temperature': 0.9,
+            'temperature': temperature,
             'top_p': 1,
             'top_k': 32,
-            'max_output_tokens': 200,
+            'max_output_tokens': max_tokens,
         }
         self.max_retries = 12
         self.retry_delay = 5  # seconds

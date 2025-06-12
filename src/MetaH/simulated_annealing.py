@@ -109,6 +109,7 @@ class RouteFinder:
     def cooling_function(self,T, it):
         return T* math.exp(-self.alpha*it)
 
+    #Similitud coseno entre ambos embeddings
     def node_goal_func(self,node_id):
         return numpy.dot(self.node_params[node_id]['vector'], self.tourist_param)/(numpy.linalg.norm(self.node_params[node_id]['vector'])* numpy.linalg.norm(self.tourist_param))
 
@@ -130,7 +131,6 @@ class RouteFinder:
 
         sum=0
         for i in range(1,length):
-            #Dot product entre los dos vectores
             sum+=C[i]
 
         return sum

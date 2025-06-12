@@ -1,19 +1,30 @@
 from typing import Optional
 from datetime import datetime
 import time
+import os
+from dotenv import load_dotenv
 import google.generativeai as genai
+
+# Load environment variables
+load_dotenv()
 
 class GeminiClient:
     """
     Cliente para interactuar con la API de Gemini.
     """
     def __init__(self):
+        # Configure Gemini API
+        api_key = os.getenv('GEMINI_API_KEY')
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY not found in environment variables.")
+        
+        genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel('gemini-2.0-flash')
         self.generation_config = {
-            'temperature': 0.9,
+            'temperature': 0.7,
             'top_p': 1,
             'top_k': 32,
-            'max_output_tokens': 200,
+            'max_output_tokens': 2000,
         }
         self.max_retries = 12
         self.retry_delay = 5  # seconds

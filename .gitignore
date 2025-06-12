@@ -1,1 +1,4 @@
-arch.env
+.env
+.qodo
+db
+__pycache__

@@ -83,7 +83,17 @@ class RouteFinder:
             it=it+1
             temperature = self.CoolingFunction(temperature,it)
 
-        return best_route
+        answer=[0]
+        length = 1 
+        for i in range(1, len(best_route)+1):
+            if self.get_time(best_route, i) <= time:
+                length = i
+                answer.append(best_route[i])
+            else:
+                break
+        answer.append(0)
+
+        return answer
 
 
     def perturb_route(route):

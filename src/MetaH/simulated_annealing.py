@@ -35,8 +35,6 @@ class RouteFinder:
         :return: La ruta óptima encontrada.
         :rtype: list[int]
         """
-        
-        self.tourist_param=tourist_param
 
         
         C=[0]
@@ -44,7 +42,7 @@ class RouteFinder:
 
         for i in range (1,self.num_nodes):
             route.append(i)
-            C.append(self.node_goal_func(i))
+            C.append(self.node_goal_func(i,tourist_param))
         #Haz que el starting_node sea el primero
         route.insert(0, 0)
 
@@ -111,10 +109,10 @@ class RouteFinder:
         return T* math.exp(-self.alpha*it)
 
     #Similitud coseno entre ambos embeddings
-    def node_goal_func(self,node_id):
-        return numpy.dot(self.node_params[node_id]['vector'], self.tourist_param)/(numpy.linalg.norm(self.node_params[node_id]['vector'])* numpy.linalg.norm(self.tourist_param))
+    def node_goal_func(self,node_id,tourist_param):
+        return numpy.dot(self.node_params[node_id]['vector'], tourist_param)/(numpy.linalg.norm(self.node_params[node_id]['vector'])* numpy.linalg.norm(tourist_param))
 
-    def goal_func(self, route, time, C):
+    def goal_func(self, route, time, tourist_param):
         """
         Función objetivo que se maximiza.
 
@@ -136,7 +134,7 @@ class RouteFinder:
 
         sum=0
         for i in range(1,length):
-            sum+=C[i]
+            sum+=self.node_goal_func(route[i],tourist_param)
 
         return sum
 

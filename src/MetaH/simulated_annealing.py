@@ -44,7 +44,7 @@ class RouteFinder:
 
         for i in range (1,self.num_nodes):
             route.append(i)
-            C.append(self.node_goal_function(i))
+            C.append(self.node_goal_func(i))
         #Haz que el starting_node sea el primero
         route.insert(0, 0)
 

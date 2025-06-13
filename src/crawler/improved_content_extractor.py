@@ -6,7 +6,6 @@ import re
 import json
 import os
 from geopy.geocoders import Nominatim
-import time
 from urllib.parse import urlparse
 
 @dataclass
@@ -56,6 +55,18 @@ class ImprovedContentExtractor:
             'names': ['.listing-title', 'h3', 'h2'],
             'descriptions': ['.listing-snippet', '.description'],
             'skip_elements': ['.navigation', '.ads', '.reviews']
+        },
+        'esmadrid.com': {
+            'places': ['.place-item', '.attraction-item', '.poi', 'article'],
+            'names': ['h2', 'h3', '.title', '.place-name'],
+            'descriptions': ['.description', '.content-text', 'p'],
+            'skip_elements': ['.nav', '.footer', '.sidebar', '.promo']
+        },
+        'spain.info': {
+            'places': ['.destination-item', '.poi-item', '.attraction', 'article'],
+            'names': ['h1', 'h2', '.destination-title', '.poi-name'],
+            'descriptions': ['.description', '.content', 'p'],
+            'skip_elements': ['.navigation', '.footer', '.ads']
         }
     }
 
@@ -107,8 +118,12 @@ class ImprovedContentExtractor:
         domain = urlparse(url).netloc.lower()
         site_config = self._get_site_config(domain)
         
-        # Extraer ciudad de la URL
+        # Extraer ciudad de la URL o texto
         city = self._extract_city_from_url(url)
+        if city == "Unknown":
+            main_text = self._get_main_text(soup)
+            known_cities = nltk_manager._extract_known_cities(main_text)
+            city = known_cities[0] if known_cities else "Unknown"
         
         # Método 1: Usar selectores específicos del sitio
         if site_config:
@@ -130,6 +145,11 @@ class ImprovedContentExtractor:
             place.named_entities = self._extract_named_entities(place.description)
             if not place.coordinates:
                 place.coordinates = self._get_coordinates(place.name, place.city)
+        
+        # Imprimir lugares extraídos para depuración
+        print(f"\n=== Lugares extraídos de {url} ===")
+        for i, place in enumerate(unique_places, 1):
+            print(f"{i}. {place.name} (Ciudad: {place.city}, Categoría: {place.category}, Coordenadas: {place.coordinates})")
         
         return unique_places
 
@@ -169,7 +189,7 @@ class ImprovedContentExtractor:
             name_element = container.select_one(name_selector)
             if name_element:
                 name = self._clean_place_name(name_element.get_text(strip=True))
-                if name and len(name) > 2:
+                if name and self._is_potential_place_name(name) and self._contains_tourism_keywords(name):
                     break
         
         if not name:
@@ -180,9 +200,9 @@ class ImprovedContentExtractor:
         for desc_selector in config.get('descriptions', ['p', '.description']):
             desc_elements = container.select(desc_selector)
             descriptions = []
-            for elem in desc_elements[:3]:  # Máximo 3 párrafos
+            for elem in desc_elements[:3]:
                 text = elem.get_text(strip=True)
-                if len(text) > 20 and text not in descriptions:
+                if len(text) > 20 and not self._is_navigation_text(text):
                     descriptions.append(text)
             if descriptions:
                 description = " ".join(descriptions)
@@ -198,43 +218,52 @@ class ImprovedContentExtractor:
             name=name,
             city=city,
             category=category,
-            description=description[:500],  # Limitar descripción
+            description=description[:500],
             visitor_appeal=self._extract_visitor_appeal(description),
             tourist_classification=self._classify_tourist_site(description),
             estimated_visit_duration=self._estimate_visit_duration(category, description),
-            coordinates=None,  # Se añadirá después
+            coordinates=None,
             source_url=url,
-            named_entities=""  # Se añadirá después
+            named_entities=""
         )
 
     def _extract_generic_places(self, soup: BeautifulSoup, url: str, city: str) -> List[TouristPlace]:
         """Extracción genérica mejorada"""
         places = []
         
-        # Buscar elementos que probablemente contengan lugares
+        # Selectores más específicos para evitar elementos genéricos
         potential_elements = soup.select(
-            'h1, h2, h3, h4, '
-            'li:not(nav li):not(.menu li), '
-            '.attraction, .place, .destination, .landmark, .poi, '
-            '.card, .item, .listing, '
-            'article, section'
+            'h2:not(.nav-title, .menu-title, .header-title), '
+            'h3:not(.nav-title, .menu-title, .header-title), '
+            '.attraction-name, .place-name, .site-name, .poi-name, '
+            '[class*="attraction-title"], [class*="place-title"], '
+            'li.attraction-item, li.place-item, li.landmark-item'
         )
         
         for element in potential_elements:
             text = element.get_text(strip=True)
             
             # Filtros de calidad
-            if not self._is_potential_place_name(text):
+            if not self._is_potential_place_name(text) or not self._contains_tourism_keywords(text):
                 continue
             
-            # Verificar si es realmente un lugar turístico
-            if not self._contains_tourism_keywords(text):
+            # Validar con spaCy
+            try:
+                doc = self.nlp(text)
+                is_valid_place = False
+                for ent in doc.ents:
+                    if ent.label_ in ["LOC", "GPE", "ORG"] and ent.text.lower() not in self._get_excluded_terms():
+                        is_valid_place = True
+                        text = ent.text.strip()
+                        break
+                if not is_valid_place and not any(keyword in text.lower() for keyword in self._get_tourism_keywords()):
+                    continue
+            except Exception as e:
+                print(f"Error processing text with spaCy: {e}")
                 continue
             
-            # Extraer descripción del contexto
             description = self._extract_context_description(element)
             
-            # Crear lugar
             category = self._classify_place_category(text + " " + description)
             
             place = TouristPlace(
@@ -259,67 +288,85 @@ class ImprovedContentExtractor:
         """Extrae lugares del texto estructurado usando NLP"""
         places = []
         
-        # Obtener texto principal
         main_text = self._get_main_text(soup)
         if len(main_text) < 100:
             return places
         
-        # Procesar con spaCy
         try:
-            doc = self.nlp(main_text[:5000])  # Limitar para rendimiento
+            doc = self.nlp(main_text[:5000])
             
-            # Buscar entidades que podrían ser lugares
             potential_places = []
             for ent in doc.ents:
-                if ent.label_ in ["ORG", "LOC", "GPE", "PERSON"] and len(ent.text.strip()) > 3:
+                if (ent.label_ in ["LOC", "GPE", "ORG"] and
+                    len(ent.text.strip()) > 3 and
+                    ent.text.lower() not in self._get_excluded_terms() and
+                    self._contains_tourism_keywords(ent.text)):
                     potential_places.append(ent.text.strip())
             
-            # Crear lugares para entidades válidas
             for place_name in potential_places:
-                if self._contains_tourism_keywords(place_name) or self._is_likely_attraction(place_name):
-                    # Buscar contexto en el texto
-                    context = self._find_text_context(main_text, place_name)
-                    
-                    category = self._classify_place_category(place_name + " " + context)
-                    
-                    place = TouristPlace(
-                        name=place_name,
-                        city=city,
-                        category=category,
-                        description=context[:300] if context else f"Tourist attraction in {city}",
-                        visitor_appeal="Interesting tourist destination",
-                        tourist_classification=self._classify_tourist_site(context),
-                        estimated_visit_duration=self._estimate_visit_duration(category, context),
-                        coordinates=None,
-                        source_url=url,
-                        named_entities=""
-                    )
-                    
-                    if self._is_valid_place(place):
-                        places.append(place)
+                context = self._find_text_context(main_text, place_name)
+                
+                category = self._classify_place_category(place_name + " " + context)
+                
+                place = TouristPlace(
+                    name=place_name,
+                    city=city,
+                    category=category,
+                    description=context[:300] if context else f"Tourist attraction in {city}",
+                    visitor_appeal=self._extract_visitor_appeal(context),
+                    tourist_classification=self._classify_tourist_site(context),
+                    estimated_visit_duration=self._estimate_visit_duration(category, context),
+                    coordinates=None,
+                    source_url=url,
+                    named_entities=""
+                )
+                
+                if self._is_valid_place(place):
+                    places.append(place)
         
         except Exception as e:
             print(f"Error in NLP processing: {e}")
         
         return places
 
-    def _is_potential_place_name(self, text: str) -> bool:
-        """Verifica si un texto podría ser un nombre de lugar"""
-        if len(text) < 3 or len(text) > 100:
-            return False
-        
-        # Filtrar elementos de navegación comunes
-        navigation_terms = {
+    def _get_excluded_terms(self) -> Set[str]:
+        """Devuelve términos excluidos para nombres de lugares"""
+        return {
             'home', 'menu', 'search', 'contact', 'about', 'login', 'register',
             'inicio', 'menú', 'buscar', 'contacto', 'acerca', 'entrar', 'registrar',
             'click here', 'read more', 'see more', 'view all', 'load more',
-            'haz clic', 'leer más', 'ver más', 'ver todo', 'cargar más'
+            'haz clic', 'leer más', 'ver más', 'ver todo', 'cargar más',
+            'museums', 'attractions', 'places', 'sites', 'locations', 'things to do',
+            'what to do', 'guide', 'best', 'top', 'ultimate', 'free access',
+            'nearby', 'open-air', 'exhibition centers', 'playas', 'museos',
+            'atracciones', 'lugares', 'sitios', 'qué hacer', 'guía', 'mejor',
+            'mejores', 'acceso gratuito', 'cerca', 'cultural', 'theme',
+            'national', 'anthropology', 'spend', 'day', 'exploring', 'emblematic',
+            'votre visite', 'tours', 'tour', 'category', 'categories'
         }
-        
-        if text.lower().strip() in navigation_terms:
+
+    def _get_tourism_keywords(self) -> Set[str]:
+        """Devuelve palabras clave turísticas"""
+        return {
+            'museum', 'gallery', 'park', 'cathedral', 'church', 'palace', 'castle',
+            'square', 'plaza', 'market', 'bridge', 'tower', 'monument', 'temple',
+            'beach', 'garden', 'theater', 'theatre', 'stadium', 'arena', 'center',
+            'centre', 'hall', 'house', 'building', 'site', 'attraction', 'landmark',
+            'museo', 'galería', 'parque', 'catedral', 'iglesia', 'palacio', 'castillo',
+            'plaza', 'mercado', 'puente', 'torre', 'monumento', 'templo', 'playa',
+            'jardín', 'teatro', 'estadio', 'centro', 'sala', 'casa', 'edificio',
+            'sitio', 'atracción', 'lugar'
+        }
+
+    def _is_potential_place_name(self, text: str) -> bool:
+        """Verifica si un texto podría ser un nombre de lugar"""
+        if len(text) < 3 or len(text) > 50 or len(text.split()) > 5:
             return False
         
-        # Filtrar precios y números
+        text_lower = text.lower().strip()
+        if text_lower in self._get_excluded_terms():
+            return False
+        
         if re.match(r'^[\d\s€$£,.-]+$', text):
             return False
         
@@ -328,25 +375,10 @@ class ImprovedContentExtractor:
     def _contains_tourism_keywords(self, text: str) -> bool:
         """Verifica si el texto contiene palabras clave turísticas"""
         text_lower = text.lower()
-        
-        tourism_keywords = {
-            # Inglés
-            'museum', 'gallery', 'park', 'cathedral', 'church', 'palace', 'castle',
-            'square', 'plaza', 'market', 'bridge', 'tower', 'monument', 'temple',
-            'beach', 'garden', 'theater', 'theatre', 'stadium', 'arena', 'center',
-            'centre', 'hall', 'house', 'building', 'site', 'attraction', 'landmark',
-            # Español
-            'museo', 'galería', 'parque', 'catedral', 'iglesia', 'palacio', 'castillo',
-            'plaza', 'mercado', 'puente', 'torre', 'monumento', 'templo', 'playa',
-            'jardín', 'teatro', 'estadio', 'centro', 'sala', 'casa', 'edificio',
-            'sitio', 'atracción', 'lugar'
-        }
-        
-        return any(keyword in text_lower for keyword in tourism_keywords)
+        return any(keyword in text_lower for keyword in self._get_tourism_keywords())
 
     def _is_likely_attraction(self, text: str) -> bool:
         """Verifica si es probable que sea una atracción turística"""
-        # Patrones comunes de atracciones
         attraction_patterns = [
             r'\b(museo|museum)\s+\w+',
             r'\b(palacio|palace)\s+\w+',
@@ -367,13 +399,11 @@ class ImprovedContentExtractor:
         """Extrae descripción del contexto del elemento"""
         descriptions = []
         
-        # Buscar en hermanos siguientes
         for sibling in element.find_next_siblings(['p', 'div', 'span'])[:3]:
             text = sibling.get_text(strip=True)
             if len(text) > 20 and not self._is_navigation_text(text):
                 descriptions.append(text)
         
-        # Buscar en el padre
         if element.parent and not descriptions:
             parent_text = element.parent.get_text(strip=True)
             if len(parent_text) > len(element.get_text(strip=True)) + 20:
@@ -383,12 +413,10 @@ class ImprovedContentExtractor:
 
     def _find_text_context(self, text: str, place_name: str) -> str:
         """Encuentra contexto de un lugar en el texto"""
-        # Buscar el lugar en el texto y extraer contexto
         place_index = text.lower().find(place_name.lower())
         if place_index == -1:
             return ""
         
-        # Extraer contexto (100 caracteres antes y 200 después)
         start = max(0, place_index - 100)
         end = min(len(text), place_index + len(place_name) + 200)
         context = text[start:end].strip()
@@ -409,15 +437,10 @@ class ImprovedContentExtractor:
         if not name:
             return ""
         
-        # Remover precios y símbolos
         name = re.sub(r'from\s*[\d€$£,.-]+', '', name, flags=re.IGNORECASE)
         name = re.sub(r'[\d€$£,.-]+\s*€', '', name)
         name = re.sub(r'^\s*[\d€$£,.-]+\s*', '', name)
-        
-        # Remover caracteres especiales al inicio/final
         name = re.sub(r'^[^\w\s]+|[^\w\s]+$', '', name)
-        
-        # Limpiar espacios múltiples
         name = re.sub(r'\s+', ' ', name).strip()
         
         return name
@@ -428,16 +451,13 @@ class ImprovedContentExtractor:
         unique_places = []
         
         for place in places:
-            # Normalizar nombre para comparación
             normalized_name = place.name.lower().strip()
             normalized_name = re.sub(r'\s+', ' ', normalized_name)
             
-            # Verificar duplicados
-            if normalized_name in seen_names or len(normalized_name) < 3:
-                continue
-            
-            # Verificar que no sea una ciudad
-            if self._is_city_name(place.name, place.city):
+            if (normalized_name in seen_names or
+                len(normalized_name) < 3 or
+                self._is_city_name(place.name, place.city) or
+                not self._contains_tourism_keywords(place.name)):
                 continue
             
             seen_names.add(normalized_name)
@@ -458,15 +478,17 @@ class ImprovedContentExtractor:
 
     def _is_valid_place(self, place: TouristPlace) -> bool:
         """Verifica si un lugar es válido"""
-        if not place.name or len(place.name) < 3:
+        if not place.name or len(place.name) < 3 or len(place.name.split()) > 5:
             return False
         
         if not place.description or len(place.description) < 10:
             return False
         
-        # Verificar que no sea duplicado en esta sesión
         place_key = f"{place.name}:{place.city}".lower()
         if place_key in self.processed_places:
+            return False
+        
+        if not self._contains_tourism_keywords(place.name) and not self._is_likely_attraction(place.name):
             return False
         
         self.processed_places.add(place_key)
@@ -489,7 +511,6 @@ class ImprovedContentExtractor:
 
     def _get_main_text(self, soup: BeautifulSoup) -> str:
         """Obtiene el texto principal de la página"""
-        # Intentar selectores de contenido principal
         main_selectors = ['main', 'article', '.content', '#content', '.main-content']
         
         for selector in main_selectors:
@@ -497,7 +518,6 @@ class ImprovedContentExtractor:
             if elements:
                 return " ".join(el.get_text(strip=True) for el in elements)
         
-        # Fallback: todo el body
         if soup.body:
             return soup.body.get_text(strip=True)
         
@@ -515,7 +535,6 @@ class ImprovedContentExtractor:
             for element in soup(tag):
                 element.decompose()
         
-        # Remover por clases
         unwanted_classes = [
             "nav", "navigation", "menu", "sidebar", "footer", "header",
             "ad", "advertisement", "banner", "popup", "modal", "cookie"
@@ -609,24 +628,21 @@ class ImprovedContentExtractor:
         if cache_key in self.coordinates_cache:
             return tuple(self.coordinates_cache[cache_key])
         
+        if self._is_too_generic_for_geocoding(place_name):
+            print(f"Skipping geocoding for generic name: {place_name}")
+            return None
+        
         try:
-            # Intentar múltiples variaciones del nombre
             search_queries = [
                 f"{place_name}, {city}, Spain",
                 f"{place_name}, {city}",
                 f"{place_name} {city}",
             ]
             
-            # Si el nombre es muy genérico, no geocodificar
-            if self._is_too_generic_for_geocoding(place_name):
-                print(f"Skipping geocoding for generic name: {place_name}")
-                return None
-            
             for query in search_queries:
                 try:
                     location = self.geolocator.geocode(query, timeout=10)
                     if location:
-                        # Verificar que las coordenadas están en la región correcta
                         if self._is_in_expected_region(location.latitude, location.longitude, city):
                             coordinates = (location.latitude, location.longitude)
                             self.coordinates_cache[cache_key] = list(coordinates)
@@ -639,7 +655,6 @@ class ImprovedContentExtractor:
                     print(f"Error with query '{query}': {e}")
                     continue
             
-            # Si no se encontró nada específico, NO usar fallback de ciudad
             print(f"No specific coordinates found for {place_name}")
             return None
             
@@ -655,20 +670,20 @@ class ImprovedContentExtractor:
             'things to do', 'what to do', 'guide', 'best', 'top', 'ultimate',
             'free access', 'contact', 'nearby', 'open-air', 'exhibition centers',
             'playas', 'museos', 'atracciones', 'lugares', 'sitios', 'qué hacer',
-            'guía', 'mejor', 'mejores', 'acceso gratuito', 'contacto', 'cerca'
+            'guía', 'mejor', 'mejores', 'acceso gratuito', 'contacto', 'cerca',
+            'cultural', 'theme', 'national', 'anthropology', 'spend', 'day',
+            'exploring', 'emblematic', 'votre visite', 'tours', 'tour',
+            'category', 'categories'
         }
         
         place_lower = place_name.lower()
         
-        # Si el nombre es muy corto
-        if len(place_name) < 4:
+        if len(place_name) < 4 or len(place_name.split()) > 5:
             return True
         
-        # Si contiene términos genéricos
         if any(term in place_lower for term in generic_terms):
             return True
         
-        # Si es principalmente números o símbolos
         if len(re.sub(r'[^a-zA-Z]', '', place_name)) < 3:
             return True
         
@@ -676,19 +691,20 @@ class ImprovedContentExtractor:
 
     def _is_in_expected_region(self, lat: float, lon: float, city: str) -> bool:
         """Verifica si las coordenadas están en la región esperada"""
-        # Definir bounding boxes para ciudades principales
         city_bounds = {
-            'Barcelona': {'min_lat': 41.32, 'max_lat': 41.47, 'min_lon': 2.05, 'max_lon': 2.25},
             'Madrid': {'min_lat': 40.35, 'max_lat': 40.50, 'min_lon': -3.80, 'max_lon': -3.60},
+            'Barcelona': {'min_lat': 41.32, 'max_lat': 41.47, 'min_lon': 2.05, 'max_lon': 2.25},
             'Valencia': {'min_lat': 39.40, 'max_lat': 39.55, 'min_lon': -0.45, 'max_lon': -0.30},
             'Sevilla': {'min_lat': 37.30, 'max_lat': 37.45, 'min_lon': -6.05, 'max_lon': -5.90},
             'Bilbao': {'min_lat': 43.20, 'max_lat': 43.35, 'min_lon': -2.95, 'max_lon': -2.85},
             'Granada': {'min_lat': 37.15, 'max_lat': 37.20, 'min_lon': -3.65, 'max_lon': -3.55},
+            'Toledo': {'min_lat': 39.80, 'max_lat': 39.90, 'min_lon': -4.10, 'max_lon': -3.95},
+            'Salamanca': {'min_lat': 40.90, 'max_lat': 41.00, 'min_lon': -5.70, 'max_lon': -5.60}
         }
         
         bounds = city_bounds.get(city)
         if not bounds:
-            return True  # Si no conocemos la ciudad, aceptar las coordenadas
+            return True
         
         return (bounds['min_lat'] <= lat <= bounds['max_lat'] and 
                 bounds['min_lon'] <= lon <= bounds['max_lon'])
@@ -700,10 +716,10 @@ class ImprovedContentExtractor:
             entities = []
             
             for ent in doc.ents:
-                if ent.label_ in ["LOC", "GPE", "ORG", "PERSON"] and len(ent.text.strip()) > 2:
+                if ent.label_ in ["LOC", "GPE", "ORG"] and len(ent.text.strip()) > 2:
                     entities.append(f"{ent.label_}: {ent.text.strip()}")
             
-            return ", ".join(entities[:10])  # Limitar a 10 entidades
+            return ", ".join(entities[:10])
         except Exception as e:
             print(f"Error extracting entities: {e}")
             return ""

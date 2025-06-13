@@ -2,3 +2,5 @@
 .qodo
 db
 __pycache__
+clear_database_auto.py
+populate_static_data.py

@@ -46,13 +46,26 @@ class CrawlerManager:
         # URLs mejoradas con fuentes confiables en inglés (mejor para spaCy en inglés)
         city_urls = {
             'Madrid': [
-                'https://www.esmadrid.com/en/tourist-information/what-to-see',
+                'https://www.esmadrid.com',
+                'https://www.tripadvisor.com/Tourism-g187514-Madrid-Vacations.html',
                 'https://www.spain.info/en/destination/madrid/',
-                'https://www.timeout.com/madrid/attractions',
-                'https://www.lonelyplanet.com/spain/madrid/attractions',
-                'https://www.tripadvisor.com/Attractions-g187514-Activities-Madrid.html',
-                'https://www.introducingmadrid.com/attractions',
-                'https://en.wikipedia.org/wiki/Tourism_in_Madrid'
+                'https://www.lonelyplanet.com/spain/madrid',
+                'https://www.madrid-tourist-guide.com',
+                'https://www.europeanbestdestinations.com/destinations/madrid/',
+                'https://www.betterroaming.com/destination-guides/madrid/',
+                'https://www.introducingmadrid.com',
+                'https://www.makemytrip.com/travel-guide/madrid/',
+                'https://www.getyourguide.com/madrid-l46/',
+                'https://www.viator.com/Madrid/d566-ttd',
+                'https://www.museodelprado.es/en',
+                'https://www.museoreinasofia.es/en',
+                'https://www.museothyssen.org/en',
+                'https://www.palaciorealmadrid.es/en',
+                'https://www.realmadrid.com/en/santiago-bernabeu-stadium',
+                'https://www.ifema.es/en/madrid-turismo',
+                'https://www.flamencotickets.com/madrid/',
+                'https://www.madrid-destino.com/en',
+                'https://www.turismomadrid.es/en/'
             ],
             'Barcelona': [
                 'https://www.barcelonaturisme.com/wv3/en/page/97/what-to-do.html',
@@ -64,12 +77,26 @@ class CrawlerManager:
                 'https://en.wikipedia.org/wiki/Tourism_in_Barcelona'
             ],
             'Valencia': [
-                'https://www.visitvalencia.com/en/what-to-do-valencia',
+                'https://www.visitvalencia.com',
                 'https://www.spain.info/en/destination/valencia/',
-                'https://www.lonelyplanet.com/spain/valencia/attractions',
-                'https://www.tripadvisor.com/Attractions-g187529-Activities-Valencia.html',
-                'https://www.turisvalencia.es/en/what-to-see',
-                'https://en.wikipedia.org/wiki/Tourism_in_Valencia'
+                'https://www.lonelyplanet.com/spain/valencia',
+                'https://www.valencia-tourist-guide.com',
+                'https://www.comunitatvalenciana.com/en',
+                'https://www.tripadvisor.com/Tourism-g187529-Valencia_Valencia_Province_Valencian_Community-Vacations.html',
+                'https://www.tripadvisor.com/Attractions-g187529-Activities-Valencia_Valencia_Province_Valencian_Community.html',
+                'https://www.valencia-tourist-travel-guide.com',
+                'https://www.visitvalencia.com/en/what-to-see-in-valencia',
+                'https://www.valencia-cityguide.com',
+                'https://www.visitacity.com/en/valencia',
+                'https://www.nomadicmatt.com/travel-guides/spain-travel-guide/valencia/',
+                'https://www.tripoto.com/valencia',
+                'https://www.nytimes.com/2025/03/06/travel/36-hours-in-valencia-spain.html',
+                'https://www.nationalgeographic.com/travel/article/paid-content-how-to-plan-a-slow-tour-of-valencia-region-in-spain',
+                'https://en.wikivoyage.org/wiki/Valencia',
+                'https://www.planetware.com/tourist-attractions-/valencia-e-vlc-v.htm',
+                'https://travel.usnews.com/Valencia_Spain/',
+                'https://www.independent.co.uk/travel/48-hours-in/valencia-travel-guide-things-to-do-spain-b2469728.html',
+                'https://www.theunconventionalroute.com/is-valencia-spain-worth-visiting/'
             ],
             'Sevilla': [
                 'https://www.visitasevilla.es/en/what-to-do',

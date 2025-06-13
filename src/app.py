@@ -4,7 +4,7 @@ import os
 import numpy as np
 from geopy.geocoders import Nominatim
 from RAG.rag import RAGPlanner
-from crawler.crawler_manager import CrawlerManager
+# from crawler.crawler_manager import CrawlerManager  # Comentado - usando datos estáticos
 from BestRoutes.meta_routes import RouteOptimizer
 
 # Opciones de categorías según mock
@@ -35,38 +35,19 @@ SCORE_LABELS = {
     5: "Me encanta"
 }
 
-@st.cache_data(ttl=300)  # Cache por 5 minutos
-def get_available_cities():
-    """Obtiene las ciudades disponibles, incluyendo todas las ciudades soportadas"""
-    try:
-        # Lista de ciudades soportadas por el sistema
-        supported_cities = [
-            'Madrid', 'Barcelona', 'Valencia', 'Sevilla', 
-            'Bilbao', 'Granada', 'Toledo', 'Salamanca'
-        ]
-        
-        # Inicializar el gestor del crawler
-        crawler_manager = CrawlerManager()
-        
-        # Obtener ciudades que ya tienen datos
-        cities_with_data = crawler_manager.get_available_cities()
-        
-        # Combinar ciudades soportadas con las que tienen datos
-        all_cities = list(set(supported_cities + cities_with_data))
-        all_cities.sort()
-        
-        # Mostrar información sobre ciudades disponibles
-        if not cities_with_data:
-            st.info("ℹ️ Las ciudades se poblarán con datos actualizados cuando busques lugares.")
-        else:
-            st.success(f"✅ {len(cities_with_data)} ciudades tienen datos disponibles en la base de datos.")
-        
-        return all_cities
-        
-    except Exception as e:
-        st.error(f"Error obteniendo ciudades: {e}")
-        # Fallback con ciudades principales de España
-        return ['Madrid', 'Barcelona', 'Valencia', 'Sevilla', 'Bilbao', 'Granada', 'Toledo', 'Salamanca']
+AVAILEABLE_CITIES = [
+    'Madrid',
+    'Barcelona',
+    'Valencia',
+    'Seville',
+    'Bilbao',
+    'Granada',
+    'Toledo',
+    'Salamanca',
+    'Málaga',
+    'San Sebastián'
+]
+
 
 def geocode_address(address, city):
     """Geocodifica una dirección"""
@@ -78,23 +59,6 @@ def geocode_address(address, city):
     except Exception as e:
         st.warning(f"No se pudo geolocalizar la dirección: {e}")
     return None, None
-
-def ensure_city_data(city, min_places=5):
-    """Verifica que haya datos básicos para una ciudad (sin forzar crawling)"""
-    try:
-        crawler_manager = CrawlerManager()
-        
-        # Solo verificar si hay datos mínimos, no hacer crawling automático
-        if crawler_manager.needs_crawling(city, min_places):
-            st.info(f"ℹ️ {city} necesitará datos actualizados. Se obtendrán al buscar lugares.")
-            return True  # Permitir continuar, el crawling se hará después
-        else:
-            st.success(f"✅ {city} tiene datos disponibles en la base de datos.")
-            return True
-        
-    except Exception as e:
-        st.warning(f"⚠️ Error verificando datos para {city}: {e}")
-        return True  # Permitir continuar de todos modos
 
 def calculate_route_metrics(route, adjacency_matrix, node_params, max_time_minutes, tourist_param, route_optimizer):
     """
@@ -387,53 +351,14 @@ def display_route_optimization_results(rag_data, user_preferences, user_lat, use
         except Exception as e:
             st.error(f"Error en la optimización de rutas: {str(e)}")
             
-            # Mostrar información de depuración
-            with st.expander("🔧 Información de depuración"):
-                st.write("**Datos disponibles:**")
-                st.write(f"- Lugares filtrados: {len(rag_data['filtered_places'])}")
-                st.write(f"- Forma de matriz de tiempos: {rag_data['time_matrix'].shape if hasattr(rag_data['time_matrix'], 'shape') else 'N/A'}")
-                st.write(f"- Embeddings de lugares: {len(rag_data.get('place_embeddings', []))}")
-                st.write(f"- Embedding del usuario: {len(rag_data.get('user_embedding', []))}")
-                st.write(f"- Estimaciones de tiempo LLM: {len(rag_data.get('llm_time_estimates', []))}")
-                
-                st.write("**Datos de metaheurística:**")
-                try:
-                    meta_data = prepare_metaheuristic_data(rag_data, user_preferences)
-                    st.write(f"- Matriz de adyacencia: {len(meta_data['adjacency_matrix'])}x{len(meta_data['adjacency_matrix'][0]) if meta_data['adjacency_matrix'] else 0}")
-                    st.write(f"- Parámetros de nodos: {len(meta_data['node_params'])}")
-                    st.write(f"- Tiempo máximo (min): {meta_data['max_time_minutes']}")
-                    st.write(f"- Parámetro turista: {len(meta_data['tourist_param'])}")
-                except Exception as e:
-                    st.write(f"Error preparando datos de metaheurística: {e}")
-
 def app():
     st.set_page_config(page_title="Planificador Turístico Inteligente", page_icon="🌍")
     st.title("🌍 Planificador Turístico Inteligente")
     st.markdown("¡Bienvenido! Descubre las mejores rutas turísticas personalizadas con IA.")
 
-    # Sidebar con información del sistema
-    with st.sidebar:
-        st.header("📊 Estado del Sistema")
-        
-        try:
-            crawler_manager = CrawlerManager()
-            stats = crawler_manager.get_city_statistics()
-            
-            st.metric("Total de lugares", stats.get('total_documents', 0))
-            st.metric("Ciudades disponibles", len(stats.get('cities', {})))
-            
-            if stats.get('cities'):
-                st.write("**Ciudades en la base de datos:**")
-                for city, count in stats['cities'].items():
-                    if city != 'Unknown':
-                        st.write(f"- {city}: {count} lugares")
-                        
-        except Exception as e:
-            st.write("No se pudo cargar información del sistema")
-
     # Selección de ciudad con carga dinámica
     st.markdown("### 📍 Destino")
-    cities = get_available_cities()
+    cities = AVAILEABLE_CITIES
     
     if not cities:
         st.error("❌ No hay ciudades disponibles. Por favor, verifica la configuración del sistema.")
@@ -450,11 +375,8 @@ def app():
         st.warning("⚠️ Por favor selecciona una ciudad.")
         return
     
-    # Asegurar que hay datos suficientes para la ciudad seleccionada
-    ensure_city_data(city, min_places=5)
-
     # Configuración del viaje
-    st.markdown("### ⏰ Configuración del Viaje")
+    st.markdown("Configuración del Viaje")
     
     col1, col2 = st.columns(2)
     
@@ -473,7 +395,7 @@ def app():
         )
 
     # Preferencias de categorías
-    st.markdown("### 🎯 Preferencias de Actividades")
+    st.markdown("Preferencias de Actividades")
     st.markdown("*Indica tu nivel de interés en cada tipo de actividad:*")
     
     category_interest = {}
@@ -494,7 +416,7 @@ def app():
             category_interest[key] = interest
 
     # Transporte y ubicación
-    st.markdown("### 🚗 Transporte y Ubicación")
+    st.markdown("Transporte y Ubicación")
     
     col1, col2 = st.columns(2)
     
@@ -534,20 +456,6 @@ def app():
         if not user_address:
             st.warning("⚠️ Se recomienda especificar un punto de partida para mejores resultados.")
         
-        # Mostrar resumen de preferencias
-        with st.expander("📋 Resumen de tus preferencias", expanded=True):
-            st.write(f"**🏙️ Ciudad:** {city}")
-            st.write(f"**⏰ Tiempo disponible:** {available_hours} horas")
-            st.write(f"**📏 Distancia máxima:** {max_distance} km")
-            st.write(f"**🚗 Transporte:** {', '.join(selected_transport)}")
-            if user_address:
-                st.write(f"**📍 Punto de partida:** {user_address}")
-            
-            # Mostrar preferencias de categorías
-            high_interest = [label for (key, label) in CATEGORIES if category_interest[key] >= 4]
-            if high_interest:
-                st.write(f"**❤️ Te gusta especialmente:** {', '.join(high_interest)}")
-
         # Geocodificación
         if user_address:
             with st.spinner("📍 Localizando tu punto de partida..."):
@@ -557,15 +465,7 @@ def app():
                     st.success(f"✅ Ubicación encontrada: {lat:.5f}, {lon:.5f}")
                 else:
                     st.error("❌ No se pudo localizar la dirección. Usando centro de la ciudad.")
-                    # Coordenadas por defecto para ciudades principales
-                    city_coords = {
-                        'Madrid': (40.4168, -3.7038),
-                        'Barcelona': (41.3851, 2.1734),
-                        'Valencia': (39.4699, -0.3763),
-                        'Sevilla': (37.3891, -5.9845),
-                        'Bilbao': (43.2627, -2.9253)
-                    }
-                    lat, lon = city_coords.get(city, (40.4168, -3.7038))
+                    
         else:
             # Usar coordenadas del centro de la ciudad
             city_coords = {
@@ -582,43 +482,6 @@ def app():
         st.markdown("### 🤖 Procesando Recomendaciones con IA")
         
         try:
-            # PASO 1: Poblar base de datos con información de URLs
-            st.markdown("#### 📡 Extrayendo Información Turística")
-            
-            with st.spinner(f"🔄 Extrayendo información turística actualizada de {city}..."):
-                try:
-                    crawler_manager = CrawlerManager()
-                    
-                    # Mostrar URLs que se van a procesar
-                    urls = crawler_manager.get_tourism_urls_for_city(city)
-                    st.info(f"🌐 Procesando {len(urls)} fuentes web especializadas en turismo de {city}")
-                    
-                    # Mostrar algunas URLs de ejemplo
-                    with st.expander("🔗 Fuentes de información", expanded=False):
-                        for i, url in enumerate(urls[:5], 1):  # Mostrar solo las primeras 5
-                            st.write(f"{i}. {url}")
-                        if len(urls) > 5:
-                            st.write(f"... y {len(urls) - 5} fuentes más")
-                    
-                    # Forzar crawling para obtener datos frescos de URLs
-                    crawling_result = crawler_manager.populate_city_data(
-                        city=city, 
-                        max_documents=20  # Más documentos para mejor cobertura
-                    )
-                    
-                    if crawling_result['success']:
-                        if crawling_result['documents_added'] > 0:
-                            st.success(f"✅ ¡Éxito! Se encontraron {crawling_result['documents_added']} nuevos lugares turísticos")
-                            st.info(f"📊 Total de documentos en BD: {crawling_result.get('total_documents', 'N/A')}")
-                        else:
-                            st.info("ℹ️ La base de datos ya estaba actualizada con información reciente")
-                    else:
-                        st.warning(f"⚠️ Crawling parcial: {crawling_result.get('error', 'Error desconocido')}")
-                        st.info("🔄 Continuando con datos existentes en la base de datos...")
-                        
-                except Exception as e:
-                    st.warning(f"⚠️ Error en crawling: {str(e)}")
-                    st.info("🔄 Continuando con datos existentes en la base de datos...")
             
             # PASO 2: Preparar preferencias del usuario
             user_preferences = {

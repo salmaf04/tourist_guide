@@ -79,7 +79,7 @@ class RouteFinder:
             
             # Enfría la temperatura
             it=it+1
-            temperature = self.CoolingFunction(temperature,it)
+            temperature = self.cooling_function(temperature, it)
 
         answer=[0] 
         for i in range(1, len(best_route)):

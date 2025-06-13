@@ -64,7 +64,7 @@ class RouteFinder:
             new_route = self.perturb_route(route)
 
             # Calcula el valor de la función objetivo para la nueva ruta
-            new_value = self.goal_func(new_route, time, C)
+            new_value = self.goal_func(new_route, time, tourist_param)
 
             # Verifica si la nueva ruta es mejor que la mejor ruta encontrada hasta ahora
             if new_value > best_value:

@@ -233,6 +233,66 @@ def display_route_optimization_results(rag_data, user_preferences, user_lat, use
             # Preparar datos para la metaheurística
             meta_data = prepare_metaheuristic_data(rag_data, user_preferences)
             
+            # IMPRIMIR MATRIZ DE TIEMPOS EN TERMINAL PARA REVISIÓN
+            print("\n" + "="*80)
+            print("🕒 MATRIZ DE TIEMPOS DE VIAJE (minutos)")
+            print("="*80)
+            adjacency_matrix = meta_data['adjacency_matrix']
+            
+            # Crear nombres de nodos para mejor legibilidad
+            node_names = ['Inicio']
+            for i, place in enumerate(rag_data['filtered_places']):
+                node_names.append(f"{place['name'][:15]}...")  # Truncar nombres largos
+            
+            # Imprimir encabezados
+            print(f"{'':>15}", end="")
+            for i, name in enumerate(node_names):
+                print(f"{name:>15}", end="")
+            print()
+            
+            # Imprimir matriz con nombres de filas
+            for i, row in enumerate(adjacency_matrix):
+                print(f"{node_names[i]:>15}", end="")
+                for j, time_val in enumerate(row):
+                    print(f"{time_val:>15.1f}", end="")
+                print()
+            
+            print("="*80)
+            print(f"📊 Dimensiones: {len(adjacency_matrix)}x{len(adjacency_matrix[0])}")
+            print(f"🎯 Lugares incluidos: {len(rag_data['filtered_places'])}")
+            print("\n📍 ÍNDICES DE NODOS:")
+            for i, name in enumerate(node_names):
+                if i == 0:
+                    print(f"   {i}: {name} (Punto de partida)")
+                else:
+                    place = rag_data['filtered_places'][i-1]
+                    category = place.get('touristClassification', 'N/A')
+                    print(f"   {i}: {place['name']} ({category})")
+            print("="*80)
+            
+            # IMPRIMIR INFORMACIÓN DE NODOS
+            print("\n🎯 PARÁMETROS DE NODOS:")
+            print("="*80)
+            node_params = meta_data['node_params']
+            for i, node in enumerate(node_params):
+                if i == 0:
+                    print(f"Nodo {i} (Inicio):")
+                    print(f"   - Vector: {node['vector'][:5]}... (dim: {len(node['vector'])})")
+                    print(f"   - Tiempo de visita: {node['time']} min")
+                else:
+                    place_name = node.get('place_name', f'Lugar {i}')
+                    print(f"Nodo {i} ({place_name}):")
+                    print(f"   - Vector: {node['vector'][:5]}... (dim: {len(node['vector'])})")
+                    print(f"   - Tiempo de visita: {node['time']} min")
+                    if 'place_data' in node:
+                        category = node['place_data'].get('touristClassification', 'N/A')
+                        print(f"   - Categoría: {category}")
+                print()
+            
+            print(f"🧭 Vector del turista: {meta_data['tourist_param'][:5]}... (dim: {len(meta_data['tourist_param'])})")
+            print(f"⏰ Tiempo máximo: {meta_data['max_time_minutes']} minutos ({meta_data['max_time_minutes']/60:.1f} horas)")
+            print("="*80 + "\n")
+            
             # Inicializar optimizador de rutas
             route_optimizer = RouteOptimizer(
                 adjacency_matrix=meta_data['adjacency_matrix'],
@@ -241,8 +301,34 @@ def display_route_optimization_results(rag_data, user_preferences, user_lat, use
                 tourist_param=meta_data['tourist_param']
             )
             
-            # Obtener rutas optimizadas
-            optimized_routes = route_optimizer.get_routes()
+            # Obtener rutas optimizadas de la metaheurística
+            all_routes = route_optimizer.get_routes()
+            
+            # Evaluar todas las rutas con la función objetivo tradicional
+            route_evaluations = []
+            for route in all_routes:
+                goal_value = route_optimizer.RouteFinder.goal_func(route, meta_data['max_time_minutes'], meta_data['tourist_param'])
+                route_evaluations.append({
+                    'route': route,
+                    'goal_value': goal_value
+                })
+            
+            # Ordenar por función objetivo (mayor es mejor) y tomar las 10 mejores
+            route_evaluations.sort(key=lambda x: x['goal_value'], reverse=True)
+            top_10_routes = [eval_data['route'] for eval_data in route_evaluations[:10]]
+            
+            st.info(f"📊 Evaluadas {len(all_routes)} rutas por metaheurística. Simulando las 10 mejores...")
+            
+            # Simular solo las 10 mejores rutas para obtener las mejores por satisfacción
+            from route_simulator import simulate_and_rank_routes
+            optimized_routes_with_details = simulate_and_rank_routes(
+                routes=top_10_routes,
+                node_params=meta_data['node_params'],
+                top_n=3,
+                simulation_steps=3,
+                tourist_name="Turista_Simulado"
+            )
+            optimized_routes = [result['route'] for result in optimized_routes_with_details]
             
             if optimized_routes:
                 st.success(f"¡Se encontraron {len(optimized_routes)} rutas optimizadas!")
@@ -262,34 +348,53 @@ def display_route_optimization_results(rag_data, user_preferences, user_lat, use
                 # Mostrar las mejores 3 rutas
                 best_routes = route_evaluations[:3]
                 
-                # Mostrar las mejores rutas
-                for idx, route_data in enumerate(best_routes):
+                # Mostrar las mejores rutas con información de simulación
+                for idx, (route_data, sim_data) in enumerate(zip(best_routes, optimized_routes_with_details)):
                     route = route_data['route']
                     metrics = route_data['metrics']
                     
-                    # Calcular puntuación de calidad
+                    # Obtener datos de simulación
+                    satisfaction_score = sim_data['satisfaction_score']
+                    simulation_success = sim_data.get('simulation_success', True)
+                    
+                    # Calcular puntuación de calidad combinada
                     quality_score = metrics['goal_value']
                     time_compliance = "✅" if metrics['within_time_limit'] else "⚠️"
+                    sim_status = "🎭" if simulation_success else "⚠️"
                     
-                    with st.expander(f"🏆 Ruta {idx + 1} - Valor: {quality_score:.2f} {time_compliance}"):
-                        # Información general de la ruta
-                        col1, col2, col3 = st.columns(3)
+                    with st.expander(f"🏆 Ruta {idx + 1} - Satisfacción: {satisfaction_score:.1f}/10 {sim_status} | Valor: {quality_score:.2f} {time_compliance}"):
+                        # Información general de la ruta con simulación
+                        col1, col2, col3, col4 = st.columns(4)
                         
                         with col1:
-                            st.metric("Tiempo Total", f"{metrics['total_time']/60:.1f}h")
+                            st.metric("Satisfacción", f"{satisfaction_score:.1f}/10")
                         with col2:
-                            st.metric("Lugares", f"{metrics['num_places']}")
+                            st.metric("Tiempo Total", f"{metrics['total_time']/60:.1f}h")
                         with col3:
-                            st.metric("Valor Objetivo", f"{metrics['goal_value']:.2f}")
+                            st.metric("Lugares", f"{metrics['num_places']}")
+                        with col4:
+                            st.metric("Interacciones", f"{sim_data['total_interactions']}")
+                        
+                        # Información de simulación
+                        st.write("**🎭 Resultados de Simulación:**")
+                        st.write(f"- 😊 Satisfacción del turista: {satisfaction_score:.1f}/10")
+                        st.write(f"- 🗣️ Interacciones totales: {sim_data['total_interactions']}")
+                        st.write(f"- 📍 Lugares visitados: {sim_data['num_places_visited']}")
+                        
+                        # Mostrar recuerdos significativos si existen
+                        if sim_data['significant_memories']:
+                            st.write("**💭 Recuerdos más significativos:**")
+                            for memory in sim_data['significant_memories'][:3]:  # Mostrar solo los primeros 3
+                                st.write(f"   • {memory}")
                         
                         # Información de tiempo
-                        st.write("**Información de tiempo:**")
-                        st.write(f"- ⏰ Tiempo total de ruta: {metrics['total_time']/60:.1f}h")
-                        st.write(f"- ⏰ Tiempo disponible: {user_preferences['available_hours']}h")
-                        st.write(f"- 📊 Eficiencia: {metrics['efficiency']:.3f}")
+                        st.write("**⏰ Información de tiempo:**")
+                        st.write(f"- Tiempo total de ruta: {metrics['total_time']/60:.1f}h")
+                        st.write(f"- Tiempo disponible: {user_preferences['available_hours']}h")
+                        st.write(f"- Eficiencia metaheurística: {metrics['efficiency']:.3f}")
                         
                         # Secuencia de lugares
-                        st.write("**Secuencia de lugares:**")
+                        st.write("**📍 Secuencia de lugares:**")
                         st.write("🏠 **Inicio:** Tu ubicación")
                         
                         for place_info in metrics['places_info']:
@@ -300,11 +405,24 @@ def display_route_optimization_results(rag_data, user_preferences, user_lat, use
                         
                         st.write("🏠 **Regreso:** Tu ubicación")
                         
-                        # Indicador de cumplimiento de tiempo
-                        if metrics['within_time_limit']:
-                            st.success("✅ Esta ruta se ajusta perfectamente a tu tiempo disponible")
-                        else:
-                            st.warning("⚠️ Esta ruta excede tu tiempo disponible")
+                        # Indicadores de calidad
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if metrics['within_time_limit']:
+                                st.success("✅ Tiempo: Se ajusta a tu disponibilidad")
+                            else:
+                                st.warning("⚠️ Tiempo: Excede tu disponibilidad")
+                        
+                        with col2:
+                            if simulation_success:
+                                if satisfaction_score >= 7:
+                                    st.success("🎭 Simulación: Experiencia excelente")
+                                elif satisfaction_score >= 5:
+                                    st.info("🎭 Simulación: Experiencia buena")
+                                else:
+                                    st.warning("🎭 Simulación: Experiencia mejorable")
+                            else:
+                                st.error("🎭 Simulación: Error en evaluación")
                         
                         # Mostrar lugares en mapa (si es posible)
                         try:
@@ -318,28 +436,58 @@ def display_route_optimization_results(rag_data, user_preferences, user_lat, use
                                     })
                             
                             if route_places:
-                                st.write("**Ubicaciones en el mapa:**")
+                                st.write("**🗺️ Ubicaciones en el mapa:**")
                                 st.map(route_places)
                         except Exception as e:
                             st.write("No se pudo mostrar el mapa de la ruta")
                 
                 # Mostrar detalles de optimización
-                with st.expander("📊 Detalles de la Optimización"):
-                    st.write("**Algoritmo utilizado:** Simulated Annealing")
-                    st.write(f"**Lugares considerados:** {len(rag_data['filtered_places'])}")
-                    st.write(f"**Tiempo máximo:** {user_preferences['available_hours']} horas")
-                    st.write(f"**Modo de transporte:** {transport_mode}")
-                    st.write(f"**Rutas generadas:** {len(optimized_routes)}")
-                    st.write(f"**Mejores rutas mostradas:** {len(best_routes)}")
+                with st.expander("📊 Detalles de la Optimización y Simulación"):
+                    st.write("**🔬 Proceso de Optimización:**")
+                    st.write("1. **Metaheurística:** Simulated Annealing genera rutas candidatas")
+                    st.write("2. **Evaluación:** Se evalúan todas las rutas con función objetivo")
+                    st.write("3. **Preselección:** Se eligen las 10 mejores rutas por función objetivo")
+                    st.write("4. **Simulación:** Las 10 mejores se evalúan con agentes virtuales")
+                    st.write("5. **Selección final:** Se eligen las 3 rutas con mayor satisfacción simulada")
+                    
+                    st.write("**📈 Parámetros del proceso:**")
+                    st.write(f"- Lugares considerados: {len(rag_data['filtered_places'])}")
+                    st.write(f"- Tiempo máximo: {user_preferences['available_hours']} horas")
+                    st.write(f"- Modo de transporte: {transport_mode}")
+                    st.write(f"- Rutas generadas por metaheurística: {len(all_routes)}")
+                    st.write(f"- Rutas preseleccionadas por función objetivo: 10")
+                    st.write(f"- Rutas simuladas: {len(top_10_routes)}")
+                    st.write(f"- Mejores rutas mostradas: {len(optimized_routes)}")
                     
                     # Información sobre los parámetros de la metaheurística
-                    st.write("**Parámetros de la metaheurística:**")
+                    st.write("**🎯 Parámetros de la metaheurística:**")
                     st.write(f"- Nodos totales: {len(meta_data['node_params'])}")
                     st.write(f"- Dimensión del embedding: {len(meta_data['tourist_param'])}")
                     st.write(f"- Tiempo máximo (minutos): {meta_data['max_time_minutes']}")
                     
+                    # Información sobre la simulación
+                    st.write("**🎭 Parámetros de la simulación:**")
+                    st.write("- Pasos de simulación por lugar: 3")
+                    st.write("- Tipos de agentes: guías, meseros, curadores, etc.")
+                    st.write("- Sistema de satisfacción: 0-10 puntos")
+                    st.write("- Interacciones por lugar: 1-2 por paso")
+                    
+                    # Mostrar estadísticas de simulación si están disponibles
+                    if optimized_routes_with_details:
+                        st.write("**📊 Estadísticas de simulación:**")
+                        satisfactions = [r['satisfaction_score'] for r in optimized_routes_with_details]
+                        interactions = [r['total_interactions'] for r in optimized_routes_with_details]
+                        
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Satisfacción promedio", f"{sum(satisfactions)/len(satisfactions):.1f}/10")
+                        with col2:
+                            st.metric("Interacciones promedio", f"{sum(interactions)/len(interactions):.0f}")
+                        with col3:
+                            st.metric("Rutas exitosas", f"{sum(1 for r in optimized_routes_with_details if r.get('simulation_success', True))}/{len(optimized_routes_with_details)}")
+                    
                     # Mostrar matriz de tiempos (solo una muestra si es muy grande)
-                    st.write("**Matriz de tiempos de viaje (minutos):**")
+                    st.write("**⏱️ Matriz de tiempos de viaje (minutos):**")
                     if len(rag_data['time_matrix']) <= 10:
                         st.dataframe(rag_data['time_matrix'])
                     else:

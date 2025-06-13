@@ -9,7 +9,7 @@ from typing import List, Dict
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-from chroma_db_manager import ChromaDBManager
+from utils.chroma_db_manager import ChromaDBManager
 from .crawler import TourismCrawler
 from .nltk_manager import NLTKManager
 

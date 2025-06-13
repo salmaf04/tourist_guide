@@ -15,7 +15,7 @@ from .nltk_manager import NLTKManager
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-from chroma_db_manager import ChromaDBManager
+from utils.chroma_db_manager import ChromaDBManager
 
 # Configuración global
 warnings.filterwarnings("ignore", message=".*verify=False.*", category=urllib3.exceptions.InsecureRequestWarning)

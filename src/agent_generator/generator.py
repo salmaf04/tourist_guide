@@ -3,18 +3,34 @@ from mesa import Model
 from typing import List, Dict
 
 from mesa.space import MultiGrid
-from mesa.datacollection import DataCollector
-from mesa.time import RandomActivation
+from mesa import DataCollector
 import google.generativeai as genai
-from fuzzy_system import SistemaDifusoImpacto
-from client import GeminiClient
-from models import Turista, Agente, Nodo
+from .fuzzy_system import SistemaDifusoImpacto
+from .client import GeminiClient
+from .models import Turista, Agente, Nodo
 
 GEMINI_API_KEY = 'AIzaSyCkN0mxdFQpGajEwB8sZm2fUsJzhpTCfvk'  
 genai.configure(api_key=GEMINI_API_KEY)
 sistema_difuso = SistemaDifusoImpacto()
 gemini_client = GeminiClient()
 
+
+# Simple scheduler to replace RandomActivation 
+class SimpleScheduler:
+    def __init__(self, model):
+        self.model = model
+        self.agents = []
+    
+    def add(self, agent):
+        self.agents.append(agent)
+    
+    def step(self):
+        # Shuffle agents for random activation
+        agents_shuffled = self.agents.copy()
+        random.shuffle(agents_shuffled)
+        for agent in agents_shuffled:
+            if hasattr(agent, 'step'):
+                agent.step()
 
 class GeneradorAgentes:
     """
@@ -124,7 +140,7 @@ class ModeloTurismo(Model):
     def __init__(self, lista_nodos: List[Dict], nombre_turista: str = "Turista"):
         super().__init__()
         self.grid = MultiGrid(10, 10, torus=True)
-        self.schedule = RandomActivation(self)
+        self.schedule = SimpleScheduler(self)
         self.datacollector = DataCollector(
             agent_reporters={"Satisfacción": lambda a: getattr(a, 'satisfaccion', None)}
         )

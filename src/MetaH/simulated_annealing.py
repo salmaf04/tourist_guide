@@ -72,7 +72,7 @@ class RouteFinder:
                 best_value = new_value
 
             # Funcion de Aceptación de Simulated Annealing
-            delta = new_value - self.goal_func(route, time)
+            delta = new_value - self.goal_func(route, time, tourist_param)
             if delta > 0 or random.random() < (temperature-self.ganma)/(self.beta-self.ganma)*math.exp(delta / temperature):
                 route = new_route
 

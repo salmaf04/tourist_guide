@@ -1,0 +1,17 @@
+BOT_NAME = 'tourism_crawler'
+
+SPIDER_MODULES = ['crawler.spiders']
+NEWSPIDER_MODULE = 'crawler.spiders'
+
+USER_AGENT = 'TourismCrawler/3.0 (+http://example.com)'
+ROBOTSTXT_OBEY = True
+CONCURRENT_REQUESTS = 2
+DOWNLOAD_DELAY = 1.0
+AUTOTHROTTLE_ENABLED = True
+AUTOTHROTTLE_START_DELAY = 1.0
+AUTOTHROTTLE_MAX_DELAY = 5.0
+AUTOTHROTTLE_TARGET_CONCURRENCY = 1.0
+
+ITEM_PIPELINES = {
+    'crawler.pipelines.ChromaPipeline': 300,
+}

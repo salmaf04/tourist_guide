@@ -1,11 +1,19 @@
-import spacy
-from typing import List, Optional, Tuple, Dict
-from bs4 import BeautifulSoup
 from dataclasses import dataclass
+from typing import List, Optional, Tuple, Dict
+from bs4 import BeautifulSoup, Tag
 import re
 import json
 import os
+import spacy
+import logging
 from geopy.geocoders import Nominatim
+from geopy.exc import GeocoderTimedOut
+from urllib.parse import urlparse
+from sentence_transformers import SentenceTransformer
+import time
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 @dataclass
 class TouristPlace:
@@ -13,472 +21,411 @@ class TouristPlace:
     city: str
     category: str
     description: str
-    visitor_appeal: str
-    tourist_classification: str
-    estimated_visit_duration: str
     coordinates: Optional[Tuple[float, float]]
-    source_url: str
-    named_entities: str
 
 class ContentExtractor:
-    MAIN_CONTENT_SELECTORS = [
-        'article', 'main', '.content', '#content',
-        '.main-content', '#main-content', 'div[role="main"]',
-        '.attraction-info', '.place-info', '.destination-content'
-    ]
-
     def __init__(self):
-        # Cargar el modelo de spaCy - priorizar inglés para mejor compatibilidad
-        try:
-            self.nlp = spacy.load("en_core_web_sm")
-            print("✅ Using English spaCy model (en_core_web_sm)")
-            self.language = "en"
-        except OSError:
-            try:
-                self.nlp = spacy.load("en_core_web_md")
-                print("✅ Using English spaCy model (en_core_web_md)")
-                self.language = "en"
-            except OSError:
-                try:
-                    self.nlp = spacy.load("es_core_news_sm")
-                    print("⚠️ Using Spanish spaCy model (es_core_news_sm)")
-                    self.language = "es"
-                except OSError:
-                    print("❌ No spaCy model found. Please install: python -m spacy download en_core_web_sm")
-                    raise RuntimeError("No spaCy model available. Install with: python -m spacy download en_core_web_sm")
-        
-        self.geolocator = Nominatim(user_agent="tourism_crawler")
+        self.nlp = self._load_spacy_model()
+        self.geolocator = Nominatim(user_agent="tourism_crawler_v4")
         self.coordinates_cache = self._load_coordinates_cache()
+        self.processed_places = set()
+        self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+        self.last_geocode_time = 0
+        self.min_interval = 1.0  # 1 segundo entre solicitudes
 
-    def _load_coordinates_cache(self) -> Dict[str, Tuple[float, float]]:
-        """Carga la caché de coordenadas desde un archivo JSON."""
+    def _load_spacy_model(self):
+        try:
+            return spacy.load("es_core_news_md")
+        except OSError:
+            logger.warning("Falling back to English spaCy model")
+            return spacy.load("en_core_web_md")
+
+    def extract_places(self, soup: BeautifulSoup, url: str, city: str = "Unknown") -> List[TouristPlace]:
+        self._clean_html(soup)
+        extracted_city = self._extract_city_name(soup, url) or city
+        places = []
+
+        extraction_strategies = [
+            self._extract_structured_data,
+            self._extract_schema_city,
+            self._extract_tourism_blocks,
+            self._extract_titles
+        ]
+
+        for strategy in extraction_strategies:
+            try:
+                new_places = strategy(soup, extracted_city, url)
+                places.extend(new_places)
+                if len(places) >= 5:
+                    break
+            except Exception as e:
+                logger.warning(f"Error in strategy {strategy.__name__}: {e}")
+
+        unique_places = self._filter_duplicates(places)
+        return unique_places
+
+    def _clean_html(self, soup: BeautifulSoup):
+        for tag in ['script', 'style', 'nav', 'footer', 'header', 'iframe', 'form']:
+            for element in soup.find_all(tag):
+                element.decompose()
+        for class_name in ['nav', 'menu', 'sidebar', 'ad', 'banner', 'cookie']:
+            for element in soup.find_all(class_=re.compile(class_name, re.I)):
+                element.decompose()
+
+    def _extract_city_name(self, soup: BeautifulSoup, url: str) -> Optional[str]:
+        city_mapping = {
+            'madrid': 'Madrid', 'barcelona': 'Barcelona', 'valencia': 'Valencia',
+            'sevilla': 'Sevilla', 'bilbao': 'Bilbao', 'granada': 'Granada',
+            'toledo': 'Toledo', 'salamanca': 'Salamanca', 'malaga': 'Málaga'
+        }
+        url_lower = url.lower()
+        for key, city in city_mapping.items():
+            if key in url_lower:
+                return city
+        main_text = soup.get_text().lower()
+        for key, city in city_mapping.items():
+            if key in main_text:
+                return city
+        return None
+
+    def _extract_structured_data(self, soup: BeautifulSoup, city: str, url: str) -> List[TouristPlace]:
+        places = []
+        for item in soup.select('[itemtype*="schema.org/Place"], [itemtype*="schema.org/TouristAttraction"]'):
+            name = self._get_structured_property(item, 'name')
+            if not name:
+                continue
+            description = self._get_structured_property(item, 'description') or f"Atracción en {city}"
+            address = self._get_structured_property(item, 'address')
+ 
+            place = TouristPlace(
+                name=name,
+                city=city,
+                category=self._classify_category(name, description),
+                description=description,
+ 
+                coordinates=self._get_coordinates(name, city, address),
+
+            )
+            places.append(place)
+        return places
+
+    def _extract_schema_city(self, soup: BeautifulSoup, city: str, url: str) -> List[TouristPlace]:
+        places = []
+        for script in soup.select('script[type="application/ld+json"]'):
+            try:
+                data = json.loads(script.string)
+                if isinstance(data, dict) and data.get('@type') in ['Place', 'TouristAttraction']:
+                    place = self._parse_schema_item(data, url, city)
+                    if place:
+                        places.append(place)
+                elif isinstance(data.get('@graph'), list):
+                    for item in data['@graph']:
+                        if item.get('@type') in ['Place', 'TouristAttraction']:
+                            place = self._parse_schema_item(item, url, city)
+                            if place:
+                                places.append(place)
+            except Exception as e:
+                logger.warning(f"Error processing JSON-LD: {e}")
+        return places
+
+    def _parse_schema_item(self, data: Dict, url: str, city: str) -> Optional[TouristPlace]:
+        name = data.get('name')
+        if not name:
+            return None
+        description = data.get('description') or f"Atracción en {city}"
+        coordinates = None
+        if data.get('geo'):
+            geo = data['geo']
+            if isinstance(geo, dict):
+                lat = geo.get('latitude')
+                lon = geo.get('longitude')
+                if lat and lon:
+                    coordinates = (float(lat), float(lon))
+        return TouristPlace(
+            name=name,
+            city=city,
+            category=self._classify_category(name, description),
+            description=description,
+
+            coordinates=coordinates or self._get_coordinates(name, city, address),
+        )
+
+    def _extract_tourism_blocks(self, soup: BeautifulSoup, city: str, url: str) -> List[TouristPlace]:
+        places = []
+        # Expanded selectors for different website structures
+        selectors = [
+            '.attraction, .poi, .landmark, .place, .card, .item, [class*="tourism"]',
+            '.content-item, .listing-item, .result-item',
+            '[class*="attraction"], [class*="place"], [class*="destination"]',
+            '.entry, .post, .article-item',
+            'section[class*="content"], div[class*="content"]'
+        ]
+        
+        for selector in selectors:
+            containers = soup.select(selector)
+            for container in containers:
+                place = self._extract_from_container(container, url, city)
+                if place:
+                    places.append(place)
+            if places:  # If we found places with this selector, stop trying others
+                break
+                
+        return places
+
+    def _extract_from_container(self, container: Tag, url: str, city: str) -> Optional[TouristPlace]:
+        name = None
+        for tag in ['h1', 'h2', 'h3']:
+            name_element = container.find(tag)
+            if name_element and self._is_valid_name(name_element.get_text()):
+                name = self._clean_text(name_element.get_text())
+                break
+        if not name:
+            return None
+        description = ""
+        for p in container.find_all('p', limit=2):
+            text = self._clean_text(p.get_text())
+            if len(text) > 30:
+                description += text + " "
+        
+        return TouristPlace(
+            name=name,
+            city=city,
+            category=self._classify_category(name, description),
+            description=description.strip(),
+
+            coordinates=self._get_coordinates(name, city),
+
+        )
+
+    def _extract_titles(self, soup: BeautifulSoup, city: str, url: str) -> List[TouristPlace]:
+        places = []
+        processed_names = set()  # Avoid duplicates
+        
+        for heading in soup.find_all(['h1', 'h2', 'h3', 'h4']):
+            text = self._clean_text(heading.get_text())
+            if not self._is_valid_name(text) or text.lower() in processed_names:
+                continue
+                
+            processed_names.add(text.lower())
+            
+            # Try to find description in multiple ways
+            description = ""
+            
+            # Method 1: Next sibling
+            next_sib = heading.find_next_sibling()
+            if next_sib and next_sib.name in ['p', 'div', 'span']:
+                desc_text = self._clean_text(next_sib.get_text())
+                if len(desc_text) > 20:
+                    description = desc_text[:300]
+            
+            # Method 2: Parent container description
+            if not description:
+                parent = heading.parent
+                if parent:
+                    for p in parent.find_all('p', limit=2):
+                        desc_text = self._clean_text(p.get_text())
+                        if len(desc_text) > 20 and desc_text != text:
+                            description = desc_text[:300]
+                            break
+            
+            # Method 3: Following paragraphs
+            if not description:
+                current = heading
+                for _ in range(3):  # Look at next 3 elements
+                    current = current.find_next()
+                    if current and current.name == 'p':
+                        desc_text = self._clean_text(current.get_text())
+                        if len(desc_text) > 20:
+                            description = desc_text[:300]
+                            break
+            
+            place = TouristPlace(
+                name=text,
+                city=city,
+                category=self._classify_category(text, description),
+                description=description or f"Atracción turística en {city}",
+ 
+
+            )
+            places.append(place)
+        return places
+
+    def _is_valid_name(self, text: str) -> bool:
+        text = text.strip()
+        if len(text) < 3 or len(text) > 100 or len(text.split()) > 12:
+            return False
+            
+        # Skip obvious navigation/UI elements
+        nav_terms = ['home', 'menu', 'search', 'contact', 'about', 'login', 'click here', 'read more', 
+                    'more info', 'see more', 'view all', 'back to', 'next', 'previous', 'share', 'print']
+        text_lower = text.lower()
+        if any(term in text_lower for term in nav_terms):
+            return False
+            
+        # Skip generic section headers
+        generic_terms = ['overview', 'introduction', 'welcome', 'getting there', 'practical information',
+                        'useful information', 'tips', 'advice', 'recommendations']
+        if text_lower in generic_terms:
+            return False
+            
+        # Tourism-related terms (expanded list)
+        tourism_terms = [
+            'museum', 'park', 'cathedral', 'palace', 'square', 'beach', 'museo', 'parque', 'catedral',
+            'church', 'temple', 'monastery', 'castle', 'fortress', 'tower', 'bridge', 'garden',
+            'gallery', 'theater', 'theatre', 'market', 'plaza', 'avenue', 'street', 'district',
+            'neighborhood', 'quarter', 'center', 'centre', 'building', 'monument', 'memorial',
+            'fountain', 'statue', 'viewpoint', 'lookout', 'observatory', 'zoo', 'aquarium',
+            'restaurant', 'cafe', 'bar', 'shop', 'store', 'mall', 'shopping', 'hotel',
+            'iglesia', 'templo', 'monasterio', 'castillo', 'fortaleza', 'torre', 'puente',
+            'jardín', 'galería', 'teatro', 'mercado', 'avenida', 'calle', 'barrio', 'centro',
+            'edificio', 'monumento', 'fuente', 'estatua', 'mirador', 'restaurante'
+        ]
+        
+        has_tourism_term = any(term in text_lower for term in tourism_terms)
+        
+        # Check if it looks like a proper name (starts with capital, reasonable length)
+        is_proper_name = (text[0].isupper() and 
+                         len(text.split()) <= 6 and 
+                         not text.isupper() and  # Not all caps
+                         not any(char.isdigit() for char in text[:3]))  # No numbers at start
+        
+        # Check if it contains location indicators
+        location_indicators = ['madrid', 'spain', 'spanish', 'de madrid', 'en madrid']
+        has_location = any(indicator in text_lower for indicator in location_indicators)
+        
+        return has_tourism_term or is_proper_name or has_location
+
+    def _clean_text(self, text: str) -> str:
+        return re.sub(r'\s+', ' ', re.sub(r'[\r\n\t]+', ' ', text)).strip()
+
+    def _classify_category(self, name: str, description: str) -> str:
+        text = f"{name} {description}".lower()
+        categories = {
+            "history": ["historic", "history", "ancient", "monument", "castle", "histórico", "castillo"],
+            "culture": ["museum", "gallery", "art", "cultural", "museo", "galería"],
+            "nature": ["park", "garden", "nature", "parque", "jardín"],
+            "religious": ["church", "cathedral", "temple", "iglesia", "catedral"],
+            "architecture": ["building", "bridge", "tower", "edificio", "puente"],
+            "beach": ["beach", "coast", "playa", "costa"]
+        }
+        for category, keywords in categories.items():
+            if any(keyword in text for keyword in keywords):
+                return category
+        return "general"
+
+    def _extract_appeal(self, description: str) -> str:
+        if not description:
+            return "Popular tourist destination"
+        appeal_terms = {
+            "Must-see": ["must-see", "essential", "imprescindible"],
+            "Iconic": ["iconic", "famous", "icónico", "famoso"],
+            "Historical": ["historical", "historic", "histórico"]
+        }
+        found = [label for label, terms in appeal_terms.items() if any(term in description.lower() for term in terms)]
+        return ", ".join(found) or "Interesting tourist destination"
+
+    def _classify_type(self, name: str, description: str) -> str:
+        text = f"{name} {description}".lower()
+        types = {
+            "museum": ["museum", "gallery", "museo"],
+            "historical": ["historic", "monument", "castle", "histórico"],
+            "religious": ["church", "cathedral", "iglesia"],
+            "park": ["park", "garden", "parque"],
+            "building": ["building", "tower", "edificio"],
+            "beach": ["beach", "playa"]
+        }
+        for typ, keywords in types.items():
+            if any(keyword in text for keyword in keywords):
+                return typ
+        return "attraction"
+
+    def _estimate_duration(self, name: str, description: str) -> str:
+        category = self._classify_category(name, description)
+        durations = {
+            "museum": "2-3 hours",
+            "history": "1-2 hours",
+            "culture": "1-3 hours",
+            "nature": "2-4 hours",
+            "religious": "30-60 minutes",
+            "architecture": "30-90 minutes",
+            "beach": "2-6 hours",
+            "general": "1-2 hours"
+        }
+        return durations.get(category, "1-2 hours")
+
+    def _get_coordinates(self, name: str, city: str, address: Optional[str] = None) -> Optional[Tuple[float, float]]:
+        cache_key = f"{name}:{city}"
+        if cache_key in self.coordinates_cache:
+            return tuple(self.coordinates_cache[cache_key])
+        if self._is_too_generic(name):
+            return None
+        current_time = time.time()
+        elapsed = current_time - self.last_geocode_time
+        if elapsed < self.min_interval:
+            time.sleep(self.min_interval - elapsed + 0.1)
+        retries = 3
+        while retries > 0:
+            try:
+                query = f"{name}, {city}, Spain"
+                if address:
+                    query = f"{name}, {address}, {city}, Spain"
+                location = self.geolocator.geocode(query, timeout=10)
+                self.last_geocode_time = time.time()
+                if location:
+                    coords = (location.latitude, location.longitude)
+                    self.coordinates_cache[cache_key] = coords
+                    self._save_coordinates_cache()
+                    return coords
+                return None
+            except GeocoderTimedOut:
+                retries -= 1
+                time.sleep(2)
+                if retries == 0:
+                    logger.warning(f"Geocoding failed for {name}, {city}")
+                    return None
+            except Exception as e:
+                logger.warning(f"Geocoding error for {name}, {city}: {e}")
+                return None
+
+    def _is_too_generic(self, name: str) -> bool:
+        generic_terms = ["museums", "attractions", "places", "guide", "best", "top"]
+        return any(term in name.lower() for term in generic_terms)
+
+    def _load_coordinates_cache(self) -> Dict:
         cache_file = "coordinates_cache.json"
         if os.path.exists(cache_file):
             try:
                 with open(cache_file, 'r') as f:
                     return json.load(f)
             except Exception as e:
-                print(f"Error loading coordinates cache: {e}")
-                return {}
+                logger.warning(f"Error loading coordinates cache: {e}")
         return {}
 
     def _save_coordinates_cache(self):
-        """Guarda la caché de coordenadas en un archivo JSON."""
         cache_file = "coordinates_cache.json"
         try:
             with open(cache_file, 'w') as f:
                 json.dump(self.coordinates_cache, f, indent=2)
         except Exception as e:
-            print(f"Error saving coordinates cache: {e}")
+            logger.warning(f"Error saving coordinates cache: {e}")
 
-    def extract_places(self, soup: BeautifulSoup, url: str, nltk_manager) -> List[TouristPlace]:
-        """Extrae lugares turísticos estructurados de una página HTML usando spaCy."""
-        places = []
-        self._remove_unwanted_elements(soup)
+    def _filter_duplicates(self, places: List[TouristPlace]) -> List[TouristPlace]:
+        seen = set()
+        unique = []
+        for place in places:
+            key = (place.name.lower(), place.city.lower())
+            if key not in seen:
+                seen.add(key)
+                unique.append(place)
+        return unique
 
-        # Extraer contenido principal
-        texts = self._extract_main_content(soup)
-        full_text = self._clean_text("\n".join(filter(None, texts)))
+    
 
-        if not full_text or len(full_text) < 50:
-            print(f"⚠️ Insufficient content extracted from {url}")
-            return places
-
-        # Procesar texto con spaCy
-        try:
-            doc = self.nlp(full_text[:1000000])  # Limitar texto para evitar problemas de memoria
-        except Exception as e:
-            print(f"Error processing text with spaCy: {e}")
-            return places
-
-        # Extraer entidades nombradas (lugares y organizaciones)
-        named_entities = []
-        cities = []
-        
-        for ent in doc.ents:
-            if ent.label_ in ["LOC", "GPE", "PERSON", "ORG"]:  # Ubicaciones, personas y organizaciones
-                entity_text = ent.text.strip()
-                if len(entity_text) > 2:  # Filtrar entidades muy cortas
-                    named_entities.append({"label": ent.label_, "text": entity_text})
-                    
-                    # Identificar ciudades conocidas
-                    if ent.label_ in ["LOC", "GPE"]:
-                        known_cities = nltk_manager._extract_known_cities(full_text)
-                        if entity_text in known_cities:
-                            cities.append(entity_text)
-
-        # Determinar ciudad principal
-        city = cities[0] if cities else self._extract_city_from_url(url)
-        entities_str = ", ".join([f"{e['label']}: {e['text']}" for e in named_entities[:10]])  # Limitar entidades
-
-        # Identificar lugares turísticos usando selectores mejorados
-        potential_places = soup.select(
-            'h1, h2, h3, h4, '
-            'li, '
-            '.attraction, .place, .destination, .landmark, .poi, '
-            '.attraction-name, .place-name, .site-name, '
-            '[class*="attraction"], [class*="place"], [class*="destination"]'
-        )
-
-        extracted_places = set()  # Para evitar duplicados
-
-        for element in potential_places:
-            place_name = element.get_text(strip=True)
-            
-            # Filtros de calidad para nombres de lugares
-            if (len(place_name) < 3 or len(place_name) > 150 or
-                place_name.lower() in ['home', 'menu', 'search', 'contact', 'about'] or
-                place_name in extracted_places):
-                continue
-
-            # Procesar el texto del elemento con spaCy para confirmar si es un lugar
-            try:
-                place_doc = self.nlp(place_name)
-                is_valid_place = False
-                
-                for ent in place_doc.ents:
-                    if ent.label_ in ["LOC", "GPE", "ORG", "PERSON"]:
-                        is_valid_place = True
-                        place_name = ent.text.strip()
-                        break
-                
-                # Si no se detecta como entidad, verificar si contiene palabras clave turísticas
-                if not is_valid_place:
-                    tourism_keywords = [
-                        'museum', 'gallery', 'park', 'cathedral', 'church', 'palace', 'castle',
-                        'square', 'plaza', 'market', 'bridge', 'tower', 'monument', 'temple',
-                        'museo', 'galería', 'parque', 'catedral', 'iglesia', 'palacio', 'castillo',
-                        'plaza', 'mercado', 'puente', 'torre', 'monumento', 'templo'
-                    ]
-                    
-                    if any(keyword in place_name.lower() for keyword in tourism_keywords):
-                        is_valid_place = True
-
-                if not is_valid_place:
-                    continue
-
-            except Exception as e:
-                print(f"Error processing place name with spaCy: {e}")
-                continue
-
-            # Extraer descripción (párrafos cercanos)
-            description = self._extract_description(element)
-            
-            if not description:
-                description = full_text[:300]  # Usar texto general como fallback
-
-            # Clasificar categoría
-            category = self._classify_place_category(description)
-
-            # Obtener coordenadas
-            coordinates = self._get_coordinates(place_name, city)
-
-            place = TouristPlace(
-                name=place_name,
-                city=city,
-                category=category,
-                description=description,
-                visitor_appeal=self._extract_visitor_appeal(description),
-                tourist_classification=self._classify_tourist_site(description, entities_str),
-                estimated_visit_duration=self._estimate_visit_duration(category, description),
-                coordinates=coordinates,
-                source_url=url,
-                named_entities=entities_str
-            )
-            
-            places.append(place)
-            extracted_places.add(place_name)
-
-        # Fallback: crear un lugar genérico si no se encontraron lugares específicos
-        if not places:
-            generic_name = self._extract_place_name(full_text, url)
-            place = TouristPlace(
-                name=generic_name,
-                city=city,
-                category="general",
-                description=full_text[:500] + "..." if len(full_text) > 500 else full_text,
-                visitor_appeal=self._extract_visitor_appeal(full_text),
-                tourist_classification="general",
-                estimated_visit_duration="2 hours",
-                coordinates=self._get_coordinates(city, city),
-                source_url=url,
-                named_entities=entities_str
-            )
-            places.append(place)
-
-        return places
-
-    def _extract_city_from_url(self, url: str) -> str:
-        """Extrae el nombre de la ciudad desde la URL."""
-        # Mapeo de ciudades conocidas
-        city_mapping = {
-            'madrid': 'Madrid',
-            'barcelona': 'Barcelona', 
-            'valencia': 'Valencia',
-            'sevilla': 'Sevilla',
-            'seville': 'Sevilla',
-            'bilbao': 'Bilbao',
-            'granada': 'Granada',
-            'toledo': 'Toledo',
-            'salamanca': 'Salamanca'
-        }
-        
-        url_lower = url.lower()
-        for key, city in city_mapping.items():
-            if key in url_lower:
-                return city
-        
-        return "Unknown"
-
-    def _extract_description(self, element) -> str:
-        """Extrae descripción de un elemento y sus elementos cercanos."""
-        descriptions = []
-        
-        # Buscar párrafos siguientes
-        next_sibling = element.find_next('p')
-        if next_sibling:
-            desc = next_sibling.get_text(strip=True)
-            if len(desc) > 20:
-                descriptions.append(desc)
-        
-        # Buscar divs con descripción
-        parent = element.parent
-        if parent:
-            desc_divs = parent.find_all(['div', 'span'], class_=re.compile(r'desc|info|detail'))
-            for div in desc_divs:
-                desc = div.get_text(strip=True)
-                if len(desc) > 20:
-                    descriptions.append(desc)
-        
-        return " ".join(descriptions[:2])  # Máximo 2 descripciones
-
-    def _classify_place_category(self, text: str) -> str:
-        """Clasifica un lugar en una categoría usando palabras clave multiidioma."""
-        text_lower = text.lower()
-        
-        # Palabras clave en inglés y español
-        categories = {
-            "engineering": [
-                "bridge", "structure", "architecture", "engineering", "building", "tower",
-                "puente", "estructura", "arquitectura", "ingeniería", "edificio", "torre"
-            ],
-            "history": [
-                "historic", "history", "ancient", "heritage", "monument", "castle", "palace",
-                "histórico", "historia", "antiguo", "patrimonio", "monumento", "castillo", "palacio"
-            ],
-            "food": [
-                "restaurant", "cuisine", "gastronomy", "food", "market", "cafe", "bar",
-                "restaurante", "cocina", "gastronomía", "comida", "mercado", "café"
-            ],
-            "culture": [
-                "culture", "cultural", "festival", "tradition", "museum", "gallery", "art",
-                "cultura", "cultural", "festival", "tradición", "museo", "galería", "arte"
-            ],
-            "beach": [
-                "beach", "coast", "sea", "shore", "waterfront",
-                "playa", "costa", "mar", "orilla"
-            ],
-            "shopping": [
-                "shop", "market", "shopping", "store", "mall",
-                "tienda", "mercado", "compras", "centro comercial"
-            ],
-            "nature": [
-                "park", "nature", "garden", "landscape", "natural", "forest", "mountain",
-                "parque", "naturaleza", "jardín", "paisaje", "natural", "bosque", "montaña"
-            ]
-        }
-
-        for category, keywords in categories.items():
-            if any(keyword in text_lower for keyword in keywords):
-                return category
-        
-        return "general"
-
-    def _extract_place_name(self, text: str, url: str) -> str:
-        """Extrae un nombre de lugar del texto o URL."""
-        try:
-            doc = self.nlp(text[:500])  # Procesar solo los primeros 500 caracteres
-            for ent in doc.ents:
-                if ent.label_ in ["LOC", "GPE", "ORG"] and len(ent.text.strip()) > 3:
-                    return ent.text.strip()
-        except Exception:
-            pass
-        
-        # Fallback: extraer de URL
-        url_parts = url.split('/')
-        for part in reversed(url_parts):
-            if part and part not in ['www', 'http:', 'https:', '', 'es', 'en']:
-                clean_name = part.replace('-', ' ').replace('_', ' ').title()
-                if len(clean_name) > 3:
-                    return clean_name
-        
-        return "Tourist Site"
-
-    def _extract_visitor_appeal(self, text: str) -> str:
-        """Extrae información sobre el atractivo para visitantes."""
-        text_lower = text.lower()
-        
-        # Palabras clave de atractivo en inglés y español
-        appeal_keywords = [
-            "beautiful", "stunning", "magnificent", "historic", "cultural", "popular", "famous",
-            "attraction", "must-see", "recommended", "amazing", "spectacular", "unique",
-            "hermoso", "impresionante", "magnífico", "histórico", "cultural", "popular", 
-            "famoso", "atracción", "imprescindible", "recomendado", "increíble", "espectacular", "único"
-        ]
-        
-        found_appeals = [keyword for keyword in appeal_keywords if keyword in text_lower]
-        
-        if found_appeals:
-            return f"Features: {', '.join(found_appeals[:3])}"
-        else:
-            return "Interesting tourist destination"
-
-    def _classify_tourist_site(self, text: str, named_entities: str) -> str:
-        """Clasifica el tipo de sitio turístico."""
-        text_lower = text.lower()
-        entities_lower = named_entities.lower()
-        
-        classifications = {
-            "museum": [
-                "museum", "gallery", "exhibition", "art", "collection",
-                "museo", "galería", "exposición", "arte", "colección"
-            ],
-            "historical": [
-                "historic", "history", "ancient", "heritage", "monument", "castle", "palace",
-                "histórico", "historia", "antiguo", "patrimonio", "monumento", "castillo", "palacio"
-            ],
-            "cultural": [
-                "culture", "cultural", "tradition", "festival", "event", "theater",
-                "cultura", "cultural", "tradición", "festival", "evento", "teatro"
-            ],
-            "natural": [
-                "park", "nature", "garden", "landscape", "natural", "forest",
-                "parque", "naturaleza", "jardín", "paisaje", "natural", "bosque"
-            ],
-            "religious": [
-                "church", "cathedral", "temple", "religious", "sacred", "monastery",
-                "iglesia", "catedral", "templo", "religioso", "sagrado", "monasterio"
-            ],
-            "entertainment": [
-                "entertainment", "show", "theater", "cinema", "fun", "amusement",
-                "entretenimiento", "espectáculo", "teatro", "cine", "diversión"
-            ]
-        }
-        
-        for classification, keywords in classifications.items():
-            if (any(keyword in text_lower for keyword in keywords) or 
-                any(keyword in entities_lower for keyword in keywords)):
-                return classification
-        
-        return "general"
-
-    def _estimate_visit_duration(self, category: str, description: str) -> str:
-        """Estima la duración de visita basada en la categoría y descripción."""
-        duration_map = {
-            "museum": "2-3 hours",
-            "historical": "1-2 hours", 
-            "cultural": "1-2 hours",
-            "natural": "2-4 hours",
-            "religious": "30 minutes - 1 hour",
-            "entertainment": "2-3 hours",
-            "food": "1-2 hours",
-            "shopping": "1-3 hours",
-            "beach": "2-6 hours",
-            "engineering": "30 minutes - 1 hour"
-        }
-        
-        return duration_map.get(category, "1-2 hours")
-
-    def _get_coordinates(self, place_name: str, city: str) -> Optional[Tuple[float, float]]:
-        """Obtiene coordenadas usando geopy con caché persistente."""
-        cache_key = f"{place_name}:{city}"
-        if cache_key in self.coordinates_cache:
-            return tuple(self.coordinates_cache[cache_key])
-
-        try:
-            # Intentar con nombre completo primero
-            location = self.geolocator.geocode(f"{place_name}, {city}", timeout=10)
-            if not location and city != "Unknown":
-                # Fallback: solo la ciudad
-                location = self.geolocator.geocode(city, timeout=10)
-            
-            if location:
-                coordinates = (location.latitude, location.longitude)
-                self.coordinates_cache[cache_key] = list(coordinates)
-                self._save_coordinates_cache()
-                return coordinates
-        except Exception as e:
-            print(f"Error geocoding {place_name}, {city}: {e}")
-        
+    def _get_structured_property(self, element: Tag, prop: str) -> Optional[str]:
+        item = element.find(itemprop=prop)
+        if item:
+            return self._clean_text(item.get_text())
+        meta = element.find('meta', {'itemprop': prop})
+        if meta and meta.get('content'):
+            return self._clean_text(meta['content'])
         return None
-
-    def _remove_unwanted_elements(self, soup: BeautifulSoup):
-        """Elimina elementos no deseados del árbol DOM."""
-        unwanted_tags = [
-            "script", "style", "header", "footer", "nav", "aside", 
-            "form", "button", "input", "select", "textarea",
-            "iframe", "embed", "object", "video", "audio"
-        ]
-        
-        for tag in unwanted_tags:
-            for element in soup(tag):
-                element.decompose()
-        
-        # Eliminar elementos con clases comunes de navegación/publicidad
-        unwanted_classes = [
-            "nav", "navigation", "menu", "sidebar", "footer", "header",
-            "ad", "advertisement", "banner", "popup", "modal"
-        ]
-        
-        for class_name in unwanted_classes:
-            for element in soup.find_all(class_=re.compile(class_name, re.I)):
-                element.decompose()
-
-    def _extract_main_content(self, soup: BeautifulSoup) -> List[str]:
-        """Intenta extraer el contenido principal usando selectores mejorados."""
-        texts = []
-
-        # Intentar selectores específicos primero
-        for selector in self.MAIN_CONTENT_SELECTORS:
-            main_elements = soup.select(selector)
-            if main_elements:
-                for el in main_elements:
-                    text = el.get_text(separator=' ', strip=True)
-                    if len(text) > 100:  # Solo textos sustanciales
-                        texts.append(text)
-                if texts:
-                    return texts
-
-        # Fallback: párrafos con contenido sustancial
-        paragraphs = soup.find_all('p')
-        substantial_texts = []
-        
-        for p in paragraphs:
-            text = p.get_text(strip=True)
-            if len(text) > 50:  # Solo párrafos con contenido
-                substantial_texts.append(text)
-        
-        if substantial_texts:
-            return substantial_texts
-        
-        # Último recurso: todo el body
-        if soup.body:
-            body_text = soup.body.get_text(separator=' ', strip=True)
-            if len(body_text) > 100:
-                return [body_text]
-
-        return texts
-
-    def _clean_text(self, text: str) -> str:
-        """Limpia y normaliza el texto extraído."""
-        if not text:
-            return ""
-        
-        # Eliminar múltiples espacios en blanco y saltos de línea
-        text = re.sub(r'\s+', ' ', text)
-        text = re.sub(r'\n\s*\n', '\n', text)
-        
-        # Eliminar caracteres especiales problemáticos
-        text = re.sub(r'[^\w\s\.,;:!?()-]', '', text)
-        
-        return text.strip()

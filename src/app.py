@@ -1,11 +1,14 @@
+import chromadb
 import streamlit as st
 import json
 import os
 import numpy as np
 from geopy.geocoders import Nominatim
 from RAG.rag import RAGPlanner
-# from crawler.crawler_manager import CrawlerManager  # Comentado - usando datos estáticos
 from BestRoutes.meta_routes import RouteOptimizer
+from scrapy.crawler import CrawlerProcess
+from crawler.tourist_spider import TouristSpider
+from scrapy.utils.project import get_project_settings
 
 # Opciones de categorías según mock
 CATEGORIES = [
@@ -39,13 +42,19 @@ AVAILEABLE_CITIES = [
     'Madrid',
     'Barcelona',
     'Valencia',
-    'Seville',
+    'Sevilla',
     'Bilbao',
     'Granada',
     'Toledo',
     'Salamanca',
     'Málaga',
-    'San Sebastián'
+    'San Sebastián',
+    'Córdoba',
+    'Zaragoza',
+    'Santander',
+    'Cádiz',
+    'Murcia',
+    'Palma de Mallorca'
 ]
 
 
@@ -223,75 +232,15 @@ def evaluate_route(route, route_optimizer, rag_data):
         'places_info': places_info
     }
 
-def display_route_optimization_results(rag_data, user_preferences, user_lat, user_lon, transport_mode):
+def display_route_optimization_results(rag_data, user_preferences):
     """Muestra los resultados de la optimización de rutas"""
     
-    st.markdown("### 🚀 Optimización de Rutas con Metaheurística")
+    st.markdown("Optimización de Rutas con Metaheurística")
     
     with st.spinner("Calculando las mejores rutas..."):
         try:
             # Preparar datos para la metaheurística
             meta_data = prepare_metaheuristic_data(rag_data, user_preferences)
-            
-            # IMPRIMIR MATRIZ DE TIEMPOS EN TERMINAL PARA REVISIÓN
-            print("\n" + "="*80)
-            print("🕒 MATRIZ DE TIEMPOS DE VIAJE (minutos)")
-            print("="*80)
-            adjacency_matrix = meta_data['adjacency_matrix']
-            
-            # Crear nombres de nodos para mejor legibilidad
-            node_names = ['Inicio']
-            for i, place in enumerate(rag_data['filtered_places']):
-                node_names.append(f"{place['name'][:15]}...")  # Truncar nombres largos
-            
-            # Imprimir encabezados
-            print(f"{'':>15}", end="")
-            for i, name in enumerate(node_names):
-                print(f"{name:>15}", end="")
-            print()
-            
-            # Imprimir matriz con nombres de filas
-            for i, row in enumerate(adjacency_matrix):
-                print(f"{node_names[i]:>15}", end="")
-                for j, time_val in enumerate(row):
-                    print(f"{time_val:>15.1f}", end="")
-                print()
-            
-            print("="*80)
-            print(f"📊 Dimensiones: {len(adjacency_matrix)}x{len(adjacency_matrix[0])}")
-            print(f"🎯 Lugares incluidos: {len(rag_data['filtered_places'])}")
-            print("\n📍 ÍNDICES DE NODOS:")
-            for i, name in enumerate(node_names):
-                if i == 0:
-                    print(f"   {i}: {name} (Punto de partida)")
-                else:
-                    place = rag_data['filtered_places'][i-1]
-                    category = place.get('touristClassification', 'N/A')
-                    print(f"   {i}: {place['name']} ({category})")
-            print("="*80)
-            
-            # IMPRIMIR INFORMACIÓN DE NODOS
-            print("\n🎯 PARÁMETROS DE NODOS:")
-            print("="*80)
-            node_params = meta_data['node_params']
-            for i, node in enumerate(node_params):
-                if i == 0:
-                    print(f"Nodo {i} (Inicio):")
-                    print(f"   - Vector: {node['vector'][:5]}... (dim: {len(node['vector'])})")
-                    print(f"   - Tiempo de visita: {node['time']} min")
-                else:
-                    place_name = node.get('place_name', f'Lugar {i}')
-                    print(f"Nodo {i} ({place_name}):")
-                    print(f"   - Vector: {node['vector'][:5]}... (dim: {len(node['vector'])})")
-                    print(f"   - Tiempo de visita: {node['time']} min")
-                    if 'place_data' in node:
-                        category = node['place_data'].get('touristClassification', 'N/A')
-                        print(f"   - Categoría: {category}")
-                print()
-            
-            print(f"🧭 Vector del turista: {meta_data['tourist_param'][:5]}... (dim: {len(meta_data['tourist_param'])})")
-            print(f"⏰ Tiempo máximo: {meta_data['max_time_minutes']} minutos ({meta_data['max_time_minutes']/60:.1f} horas)")
-            print("="*80 + "\n")
             
             # Inicializar optimizador de rutas
             route_optimizer = RouteOptimizer(
@@ -320,7 +269,7 @@ def display_route_optimization_results(rag_data, user_preferences, user_lat, use
             st.info(f"📊 Evaluadas {len(all_routes)} rutas por metaheurística. Simulando las 10 mejores...")
             
             # Simular solo las 10 mejores rutas para obtener las mejores por satisfacción
-            from route_simulator import simulate_and_rank_routes
+            from agent_generator.route_simulator import simulate_and_rank_routes
             optimized_routes_with_details = simulate_and_rank_routes(
                 routes=top_10_routes,
                 node_params=meta_data['node_params'],
@@ -364,34 +313,15 @@ def display_route_optimization_results(rag_data, user_preferences, user_lat, use
                     
                     with st.expander(f"🏆 Ruta {idx + 1} - Satisfacción: {satisfaction_score:.1f}/10 {sim_status} | Valor: {quality_score:.2f} {time_compliance}"):
                         # Información general de la ruta con simulación
-                        col1, col2, col3, col4 = st.columns(4)
+                        col1, col2 = st.columns(2)
                         
                         with col1:
-                            st.metric("Satisfacción", f"{satisfaction_score:.1f}/10")
-                        with col2:
                             st.metric("Tiempo Total", f"{metrics['total_time']/60:.1f}h")
-                        with col3:
+                        with col2:
                             st.metric("Lugares", f"{metrics['num_places']}")
-                        with col4:
-                            st.metric("Interacciones", f"{sim_data['total_interactions']}")
+
                         
-                        # Información de simulación
-                        st.write("**🎭 Resultados de Simulación:**")
-                        st.write(f"- 😊 Satisfacción del turista: {satisfaction_score:.1f}/10")
-                        st.write(f"- 🗣️ Interacciones totales: {sim_data['total_interactions']}")
-                        st.write(f"- 📍 Lugares visitados: {sim_data['num_places_visited']}")
-                        
-                        # Mostrar recuerdos significativos si existen
-                        if sim_data['significant_memories']:
-                            st.write("**💭 Recuerdos más significativos:**")
-                            for memory in sim_data['significant_memories'][:3]:  # Mostrar solo los primeros 3
-                                st.write(f"   • {memory}")
-                        
-                        # Información de tiempo
-                        st.write("**⏰ Información de tiempo:**")
                         st.write(f"- Tiempo total de ruta: {metrics['total_time']/60:.1f}h")
-                        st.write(f"- Tiempo disponible: {user_preferences['available_hours']}h")
-                        st.write(f"- Eficiencia metaheurística: {metrics['efficiency']:.3f}")
                         
                         # Secuencia de lugares
                         st.write("**📍 Secuencia de lugares:**")
@@ -404,25 +334,6 @@ def display_route_optimization_results(rag_data, user_preferences, user_lat, use
                             st.write(f"   🏷️ Categoría: {place_info['category']}")
                         
                         st.write("🏠 **Regreso:** Tu ubicación")
-                        
-                        # Indicadores de calidad
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            if metrics['within_time_limit']:
-                                st.success("✅ Tiempo: Se ajusta a tu disponibilidad")
-                            else:
-                                st.warning("⚠️ Tiempo: Excede tu disponibilidad")
-                        
-                        with col2:
-                            if simulation_success:
-                                if satisfaction_score >= 7:
-                                    st.success("🎭 Simulación: Experiencia excelente")
-                                elif satisfaction_score >= 5:
-                                    st.info("🎭 Simulación: Experiencia buena")
-                                else:
-                                    st.warning("🎭 Simulación: Experiencia mejorable")
-                            else:
-                                st.error("🎭 Simulación: Error en evaluación")
                         
                         # Mostrar lugares en mapa (si es posible)
                         try:
@@ -440,58 +351,6 @@ def display_route_optimization_results(rag_data, user_preferences, user_lat, use
                                 st.map(route_places)
                         except Exception as e:
                             st.write("No se pudo mostrar el mapa de la ruta")
-                
-                # Mostrar detalles de optimización
-                with st.expander("📊 Detalles de la Optimización y Simulación"):
-                    st.write("**🔬 Proceso de Optimización:**")
-                    st.write("1. **Metaheurística:** Simulated Annealing genera rutas candidatas")
-                    st.write("2. **Evaluación:** Se evalúan todas las rutas con función objetivo")
-                    st.write("3. **Preselección:** Se eligen las 10 mejores rutas por función objetivo")
-                    st.write("4. **Simulación:** Las 10 mejores se evalúan con agentes virtuales")
-                    st.write("5. **Selección final:** Se eligen las 3 rutas con mayor satisfacción simulada")
-                    
-                    st.write("**📈 Parámetros del proceso:**")
-                    st.write(f"- Lugares considerados: {len(rag_data['filtered_places'])}")
-                    st.write(f"- Tiempo máximo: {user_preferences['available_hours']} horas")
-                    st.write(f"- Modo de transporte: {transport_mode}")
-                    st.write(f"- Rutas generadas por metaheurística: {len(all_routes)}")
-                    st.write(f"- Rutas preseleccionadas por función objetivo: 10")
-                    st.write(f"- Rutas simuladas: {len(top_10_routes)}")
-                    st.write(f"- Mejores rutas mostradas: {len(optimized_routes)}")
-                    
-                    # Información sobre los parámetros de la metaheurística
-                    st.write("**🎯 Parámetros de la metaheurística:**")
-                    st.write(f"- Nodos totales: {len(meta_data['node_params'])}")
-                    st.write(f"- Dimensión del embedding: {len(meta_data['tourist_param'])}")
-                    st.write(f"- Tiempo máximo (minutos): {meta_data['max_time_minutes']}")
-                    
-                    # Información sobre la simulación
-                    st.write("**🎭 Parámetros de la simulación:**")
-                    st.write("- Pasos de simulación por lugar: 3")
-                    st.write("- Tipos de agentes: guías, meseros, curadores, etc.")
-                    st.write("- Sistema de satisfacción: 0-10 puntos")
-                    st.write("- Interacciones por lugar: 1-2 por paso")
-                    
-                    # Mostrar estadísticas de simulación si están disponibles
-                    if optimized_routes_with_details:
-                        st.write("**📊 Estadísticas de simulación:**")
-                        satisfactions = [r['satisfaction_score'] for r in optimized_routes_with_details]
-                        interactions = [r['total_interactions'] for r in optimized_routes_with_details]
-                        
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.metric("Satisfacción promedio", f"{sum(satisfactions)/len(satisfactions):.1f}/10")
-                        with col2:
-                            st.metric("Interacciones promedio", f"{sum(interactions)/len(interactions):.0f}")
-                        with col3:
-                            st.metric("Rutas exitosas", f"{sum(1 for r in optimized_routes_with_details if r.get('simulation_success', True))}/{len(optimized_routes_with_details)}")
-                    
-                    # Mostrar matriz de tiempos (solo una muestra si es muy grande)
-                    st.write("**⏱️ Matriz de tiempos de viaje (minutos):**")
-                    if len(rag_data['time_matrix']) <= 10:
-                        st.dataframe(rag_data['time_matrix'])
-                    else:
-                        st.write(f"Matriz de {rag_data['time_matrix'].shape[0]}x{rag_data['time_matrix'].shape[1]} (muy grande para mostrar)")
             
             else:
                 st.warning("No se pudieron generar rutas optimizadas. Intenta ajustar tus preferencias.")
@@ -499,6 +358,99 @@ def display_route_optimization_results(rag_data, user_preferences, user_lat, use
         except Exception as e:
             st.error(f"Error en la optimización de rutas: {str(e)}")
             
+def fetch_tourism_data(city):
+    """Obtiene datos turísticos actualizados usando el crawler Scrapy"""
+    st.markdown("#### 📡 Extrayendo Información Turística")
+    
+    with st.spinner(f"🔄 Extrayendo información turística actualizada de {city}..."):
+        try:
+            # Inicializar cliente Chroma
+            chroma_client = chromadb.Client()
+            collection = chroma_client.get_or_create_collection(name="tourist_places")
+            
+            # Verificar documentos existentes para la ciudad
+            query_result = collection.query(
+                query_texts=[f"lugares turísticos en {city}"],
+                n_results=100,
+                where={"city": city}
+            )
+            current_docs = len(query_result['ids'][0])
+            min_required = 5
+            
+            st.info(f"📊 Estado inicial: {current_docs} documentos para {city} en la base de datos")
+            
+
+            urls = TouristSpider.city_urls.get(city, [])
+            st.info(f"🌐 Procesando {len(urls)} fuentes web especializadas en turismo de {city}")
+            
+            # Mostrar algunas URLs de ejemplo
+            with st.expander("🔗 Fuentes de información", expanded=False):
+                for i, url in enumerate(urls[:5], 1):
+                    st.write(f"{i}. {url}")
+                if len(urls) > 5:
+                    st.write(f"... y {len(urls) - 5} fuentes más")
+            
+            # Si hay suficientes documentos, no es necesario crawlear
+            if current_docs >= min_required:
+                st.success(f"✅ {city} ya tiene {current_docs} documentos en la base de datos")
+                return True
+            
+            # Ejecutar el crawler Scrapy
+            st.info(f"🔄 Necesitamos más datos para {city} (actual: {current_docs}, mínimo: {min_required})")
+            
+            # Configurar y ejecutar el crawler para la ciudad específica
+            process = CrawlerProcess(get_project_settings())
+            process.crawl(TouristSpider, target_city=city)
+            process.start()
+            
+            # Verificar documentos añadidos después del crawling
+            query_result = collection.query(
+                query_texts=[f"lugares turísticos en {city}"],
+                n_results=100,
+                where={"city": city}
+            )
+            new_docs = len(query_result['ids'][0])
+            documents_added = new_docs - current_docs
+            
+            # Mostrar resultados detallados
+            st.write("📋 **Resultados del crawling:**")
+            st.write(f"- ✅ Éxito: {documents_added > 0}")
+            st.write(f"- 📄 Documentos añadidos: {documents_added}")
+            st.write(f"- 🌐 URLs procesadas: {len(urls)}")
+            st.write(f"- 📑 Documentos totales para {city}: {new_docs}")
+            
+            if documents_added > 0:
+                st.success(f"✅ ¡Éxito! Se añadieron {documents_added} nuevos lugares turísticos")
+                return True
+            else:
+                if new_docs > 0:
+                    st.info(f"ℹ️ La base de datos ya tenía {new_docs} documentos para {city}")
+                    return True
+                else:
+                    st.warning("⚠️ No se encontraron datos turísticos para esta ciudad")
+                    return False
+                    
+        except Exception as e:
+            st.error(f"❌ Error crítico en crawling: {str(e)}")
+            import traceback
+            st.code(traceback.format_exc())
+            
+            # Verificar si hay datos existentes
+            try:
+                query_result = collection.query(
+                    query_texts=[f"lugares turísticos en {city}"],
+                    n_results=100,
+                    where={"city": city}
+                )
+                total_for_city = len(query_result['ids'][0])
+                if total_for_city > 0:
+                    st.info(f"🔄 Usando {total_for_city} documentos existentes para {city}")
+                    return True
+            except:
+                pass
+            
+            return False
+
 def app():
     st.set_page_config(page_title="Planificador Turístico Inteligente", page_icon="🌍")
     st.title("🌍 Planificador Turístico Inteligente")
@@ -621,7 +573,18 @@ def app():
                 'Barcelona': (41.3851, 2.1734),
                 'Valencia': (39.4699, -0.3763),
                 'Sevilla': (37.3891, -5.9845),
-                'Bilbao': (43.2627, -2.9253)
+                'Bilbao': (43.2627, -2.9253),
+                'Granada': (37.1773, -3.5986),
+                'Toledo': (39.8628, -4.0273),
+                'Salamanca': (40.9701, -5.6635),
+                'Málaga': (36.7213, -4.4214),
+                'San Sebastián': (43.3183, -1.9812),
+                'Córdoba': (37.8882, -4.7794),
+                'Zaragoza': (41.6488, -0.8891),
+                'Santander': (43.4623, -3.8099),
+                'Cádiz': (36.5297, -6.2920),
+                'Murcia': (37.9922, -1.1307),
+                'Palma de Mallorca': (39.5696, 2.6502)
             }
             lat, lon = city_coords.get(city, (40.4168, -3.7038))
             st.info(f"📍 Usando centro de {city} como punto de partida")
@@ -630,6 +593,18 @@ def app():
         st.markdown("### 🤖 Procesando Recomendaciones con IA")
         
         try:
+            
+ 
+           # PASO 1: Obtener datos actualizados del crawler
+            crawler_success = fetch_tourism_data(city)
+            
+            if not crawler_success:
+                st.error("❌ No se pudieron obtener datos turísticos para esta ciudad.")
+                st.info("💡 Intenta:")
+                st.write("- Seleccionar una ciudad diferente")
+                st.write("- Verificar tu conexión a internet")
+                st.write("- Intentar nuevamente más tarde")
+                return
             
             # PASO 2: Preparar preferencias del usuario
             user_preferences = {

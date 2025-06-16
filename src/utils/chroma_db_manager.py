@@ -4,8 +4,9 @@ import chromadb
 import numpy as np
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), 'src', 'crawler'))
-from src.crawler.content_extractor import TouristPlace 
+
+from crawler.content_extractor import TouristPlace
+
 
 class ChromaDBManager:
     """Manejador de operaciones con ChromaDB"""
@@ -13,9 +14,9 @@ class ChromaDBManager:
     def __init__(self, collection: chromadb.Collection):
         self.collection = collection
 
-    def url_exists(self, url: str) -> bool:
-        """Verifica si una URL ya existe en la colección."""
-        docs = self.collection.get(where={"source_url": url})
+    def place_exists(self, name: str, city: str) -> bool:
+        """Verifica si un lugar ya existe en la colección."""
+        docs = self.collection.get(where={"name": name, "city": city})
         return len(docs["ids"]) > 0
 
     def add_place(self, place: TouristPlace, embedding: np.ndarray) -> str:
@@ -26,9 +27,6 @@ Name: {place.name}
 City: {place.city}
 Category: {place.category}
 Description: {place.description}
-Visitor Appeal: {place.visitor_appeal}
-Classification: {place.tourist_classification}
-Estimated Visit Duration: {place.estimated_visit_duration}
 Coordinates: {place.coordinates if place.coordinates else 'Unknown'}
         """.strip()
 
@@ -36,12 +34,8 @@ Coordinates: {place.coordinates if place.coordinates else 'Unknown'}
             "name": place.name,
             "city": place.city,
             "category": place.category,
-            "visitor_appeal": place.visitor_appeal,
-            "tourist_classification": place.tourist_classification,
-            "estimated_visit_duration": place.estimated_visit_duration,
+            "description": place.description,
             "coordinates": str(place.coordinates) if place.coordinates else "Unknown",
-            "source_url": place.source_url,
-            "named_entities": place.named_entities
         }
 
         self.collection.add(
@@ -71,9 +65,9 @@ Coordinates: {place.coordinates if place.coordinates else 'Unknown'}
                     metadata = query_results['metadatas'][0][i]
                     distance = query_results['distances'][0][i]
                     print(f"\nResult {i+1}:")
-                    print(f"  Source: {metadata.get('source_url', 'N/A')}")
+                    print(f"  Name: {metadata.get('name', 'N/A')}")
+                    print(f"  City: {metadata.get('city', 'N/A')}")
                     print(f"  Distance: {distance:.4f}")
-                    print(f"  Named Entities: {metadata.get('named_entities', 'N/A')}")
                     print(f"  Text (snippet): {doc_text[:250]}...")
             else:
                 print("No results found or issue with results format.")
@@ -83,8 +77,8 @@ Coordinates: {place.coordinates if place.coordinates else 'Unknown'}
             for i, doc in enumerate(all_docs["documents"]):
                 print(f"\nDocumento {i+1}:")
                 print(f"  ID: {all_docs['ids'][i]}")
-                print(f"  Source: {all_docs['metadatas'][i].get('source_url', 'N/A')}")
-                print(f"  Named Entities: {all_docs['metadatas'][i].get('named_entities', 'N/A')}")
+                print(f"  Name: {all_docs['metadatas'][i].get('name', 'N/A')}")
+                print(f"  City: {all_docs['metadatas'][i].get('city', 'N/A')}")
                 print(f"  Category: {all_docs['metadatas'][i].get('category', 'N/A')}")
                 print(f"  Texto (snippet): {doc[:250]}...")
         else:

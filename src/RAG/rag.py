@@ -1,6 +1,7 @@
 import numpy as np
 import requests
 import re
+import time
 from typing import Dict, List, Tuple, Any, Optional
 from sentence_transformers import SentenceTransformer
 from geopy.distance import geodesic
@@ -53,7 +54,7 @@ class RAGPlanner:
         """Initialize ChromaDB client and collection."""
         try:
             self.chroma_client = chromadb.PersistentClient(path=self.chroma_db_path)
-            self.chroma_collection = self.chroma_client.get_or_create_collection(name="tourism_docs")
+            self.chroma_collection = self.chroma_client.get_or_create_collection(name="tourist_places")
             logger.info(f"ChromaDB initialized. Collection has {self.chroma_collection.count()} documents.")
         except Exception as e:
             logger.error(f"Failed to initialize ChromaDB: {e}")
@@ -87,25 +88,25 @@ class RAGPlanner:
             processed_urls = set()
 
             for doc_id, doc_text, metadata in zip(all_docs["ids"], all_docs["documents"], all_docs["metadatas"]):
-                source_url = metadata.get("source_url", "")
-                if source_url in processed_urls:
+                place_name = metadata.get("name", "Tourist Site")
+                place_city = metadata.get("city", "Unknown")
+                place_key = f"{place_name}_{place_city}"
+                
+                if place_key in processed_urls:
                     continue
-                processed_urls.add(source_url)
+                processed_urls.add(place_key)
 
                 place = {
-                    "name": metadata.get("name", "Tourist Site"),
+                    "name": place_name,
                     "type": "tourist_site",
                     "description": doc_text[:500] + "..." if len(doc_text) > 500 else doc_text,
-                    "visitorAppeal": metadata.get("visitor_appeal", "Interesting tourist destination"),
-                    "touristClassification": metadata.get("tourist_classification", "general"),
+                    "category": metadata.get("category", "general"),
                     "bestTimeToVisit": "Year-round",
-                    "estimatedVisitDuration": metadata.get("estimated_visit_duration", "2 hours"),
+                    "estimatedVisitDuration": "2 hours",
                     "location": {
-                        "city": metadata.get("city", "Unknown"),
+                        "city": place_city,
                         "country": "Spain"
                     },
-                    "source_url": source_url,
-                    "named_entities": metadata.get("named_entities", ""),
                     "chroma_doc_id": doc_id,
                     "coordinates": self._safe_eval_coordinates(metadata.get("coordinates", "None"))
                 }
@@ -175,7 +176,7 @@ class RAGPlanner:
         return transport_map.get(transport_mode, "foot-walking")
 
     def _calculate_time_matrix_ors(self, places: List[Dict], user_lat: float, user_lon: float, transport_mode: str) -> np.ndarray:
-        """Calculate time matrix using OpenRouteService API."""
+        """Calculate time matrix using OpenRouteService API with retry logic."""
         api_key = self.openrouteservice_api_key
         coordinates = [[user_lon, user_lat]]
 
@@ -198,16 +199,66 @@ class RAGPlanner:
             "units": "m"
         }
 
-        try:
-            response = requests.post(url, json=body, headers=headers)
-            if response.status_code == 200:
-                data = response.json()
-                return np.array(data['durations']) / 60  # Convertir a minutos
-            else:
-                raise RuntimeError(f"OpenRouteService API failed: {response.text}")
-        except Exception as e:
-            logger.error(f"Error calling OpenRouteService API: {e}")
-            raise RuntimeError(f"Failed to call OpenRouteService API: {e}")
+        # Retry logic with exponential backoff
+        max_retries = 3
+        base_delay = 2  # seconds
+        request_timeout = 30  # seconds
+        
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"Attempting OpenRouteService API call (attempt {attempt + 1}/{max_retries})")
+                
+                # Set timeout to prevent hanging
+                response = requests.post(url, json=body, headers=headers, timeout=request_timeout)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    logger.info("OpenRouteService API call successful")
+                    return np.array(data['durations']) / 60  # Convertir a minutos
+                elif response.status_code == 504:
+                    error_msg = f"OpenRouteService API timeout (504) on attempt {attempt + 1}"
+                    logger.warning(error_msg)
+                    last_error = f"504 Gateway Timeout: {response.text}"
+                    if attempt < max_retries - 1:
+                        delay = base_delay * (2 ** attempt)  # Exponential backoff
+                        logger.info(f"Waiting {delay} seconds before retry...")
+                        time.sleep(delay)
+                        continue
+                else:
+                    error_msg = f"OpenRouteService API failed with status {response.status_code}: {response.text}"
+                    logger.error(error_msg)
+                    last_error = f"HTTP {response.status_code}: {response.text}"
+                    if attempt < max_retries - 1:
+                        delay = base_delay * (2 ** attempt)
+                        logger.info(f"Waiting {delay} seconds before retry...")
+                        time.sleep(delay)
+                        continue
+                        
+            except requests.exceptions.Timeout:
+                error_msg = f"OpenRouteService API request timeout on attempt {attempt + 1}"
+                logger.warning(error_msg)
+                last_error = "Request timeout after 30 seconds"
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    logger.info(f"Waiting {delay} seconds before retry...")
+                    time.sleep(delay)
+                    continue
+                    
+            except Exception as e:
+                error_msg = f"Error calling OpenRouteService API on attempt {attempt + 1}: {e}"
+                logger.error(error_msg)
+                last_error = str(e)
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    logger.info(f"Waiting {delay} seconds before retry...")
+                    time.sleep(delay)
+                    continue
+        
+        # Si llegamos aquí, todos los intentos fallaron
+        logger.error("All OpenRouteService API attempts failed")
+        raise RuntimeError(f"Failed to call OpenRouteService API after {max_retries} attempts. Last error: {last_error}")
 
     def _generate_place_embeddings(self, places: List[Dict]) -> List[np.ndarray]:
         """Generate embeddings for places."""
@@ -217,8 +268,7 @@ class RAGPlanner:
 Name: {place.get('name', '')}
 Type: {place.get('type', '')}
 Description: {place.get('description', '')}
-Visitor Appeal: {place.get('visitorAppeal', '')}
-Classification: {place.get('touristClassification', '')}
+Category: {place.get('category', '')}
 Best Time to Visit: {place.get('bestTimeToVisit', '')}
 Location: {place.get('location', {}).get('city', '')} {place.get('location', {}).get('country', '')}
             """.strip()
@@ -382,25 +432,25 @@ Location: {place.get('location', {}).get('city', '')} {place.get('location', {})
                 search_results["metadatas"][0],
                 search_results["distances"][0]
             )):
-                source_url = metadata.get("source_url", "")
-                if source_url in processed_urls:
+                place_name = metadata.get("name", "Tourist Site")
+                place_city = metadata.get("city", "Unknown")
+                place_key = f"{place_name}_{place_city}"
+                
+                if place_key in processed_urls:
                     continue
-                processed_urls.add(source_url)
+                processed_urls.add(place_key)
 
                 place = {
-                    "name": metadata.get("name", "Tourist Site"),
+                    "name": place_name,
                     "type": "tourist_site",
                     "description": doc_text[:500] + "..." if len(doc_text) > 500 else doc_text,
-                    "visitorAppeal": metadata.get("visitor_appeal", "Interesting tourist destination"),
-                    "touristClassification": metadata.get("tourist_classification", "general"),
+                    "category": metadata.get("category", "general"),
                     "bestTimeToVisit": "Year-round",
-                    "estimatedVisitDuration": metadata.get("estimated_visit_duration", "2 hours"),
+                    "estimatedVisitDuration": "2 hours",
                     "location": {
-                        "city": metadata.get("city", "Unknown"),
+                        "city": place_city,
                         "country": "Spain"
                     },
-                    "source_url": source_url,
-                    "named_entities": metadata.get("named_entities", ""),
                     "semantic_distance": distance,
                     "chroma_doc_id": search_results["ids"][0][i],
                     "coordinates": self._safe_eval_coordinates(metadata.get("coordinates", "None"))
@@ -501,8 +551,7 @@ CATEGORY INTERESTS (1-5 scale):
 {i+1}. {place['name']}
    - Type: {place.get('type', 'Unknown')}
    - Description: {place.get('description', 'No description')}
-   - Visitor Appeal: {place.get('visitorAppeal', 'No information')}
-   - Classification: {place.get('touristClassification', 'Unknown')}
+   - Category: {place.get('category', 'Unknown')}
    - Estimated Visit Duration: {place.get('estimatedVisitDuration', 'Unknown')}
 """
 

@@ -4,6 +4,8 @@ import scrapy
 from urllib.parse import urlparse, urljoin
 from bs4 import BeautifulSoup
 import re
+from agent_generator.client import GeminiClient
+import json
 
 
 class TouristSpider(scrapy.Spider):
@@ -185,6 +187,7 @@ class TouristSpider(scrapy.Spider):
     def __init__(self, target_city=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.content_extractor = ContentExtractor()
+        self.llm_client = GeminiClient()  # Cliente Gemini
         self.crawled_pages = 0
         self.target_city = target_city
         
@@ -209,20 +212,38 @@ class TouristSpider(scrapy.Spider):
         self.visited_urls.add(response.url)
         self.logger.info(f"Processing URL {self.crawled_pages}/{self.max_pages}: {response.url}")
 
-        # Determinar la ciudad asociada a la URL
         city = self._get_city_from_url(response.url)
-        
         soup = BeautifulSoup(response.text, 'html.parser')
-        places = self.content_extractor.extract_places(soup, response.url, city=city)
 
-        for place in places:
+        # Extraer texto crudo principal de la página
+        for script in soup(["script", "style", "noscript"]):
+            script.decompose()
+        raw_text = ' '.join(soup.stripped_strings)
+        raw_text = raw_text[:6000]  # Limitar longitud para el LLM si es necesario
+
+        prompt = (
+            f"Extrae y devuelve en JSON los siguientes campos del texto de una página turística: "
+            f"nombre, ciudad, categoria, descripcion, coordenadas. "
+            f"Si no encuentras algún campo, déjalo vacío o null. "
+            f"Texto de la página:\n\n{raw_text}\n\n"
+            f"Devuelve solo el JSON."
+        )
+        llm_response = self.llm_client.generate(prompt)
+        try:
+            data = json.loads(llm_response)
+            # Guardar el JSON en un archivo (uno por línea)
+            with open("lugares_llm.json", "a", encoding="utf-8") as f:
+                f.write(json.dumps(data, ensure_ascii=False) + "\n")
+            # Crear el item para el pipeline y la base de datos
             item = TouristPlaceItem()
-            item['name'] = place.name
-            item['city'] = place.city or city  # Prioriza la ciudad extraída del contenido, sino usa la de la URL
-            item['category'] = place.category
-            item['description'] = place.description
-            item['coordinates'] = place.coordinates
+            item['name'] = data.get('nombre')
+            item['city'] = data.get('ciudad')
+            item['description'] = data.get('descripcion')
+            item['category'] = data.get('categoria')
+            item['coordinates'] = data.get('coordenadas')
             yield item
+        except Exception as e:
+            self.logger.warning(f"Error procesando respuesta LLM: {e}")
 
         if self.crawled_pages < self.max_pages:
             depth = response.meta.get('depth', 0)
@@ -232,7 +253,6 @@ class TouristSpider(scrapy.Spider):
                     abs_url = urljoin(response.url, href)
                     clean_url = urlparse(abs_url)._replace(fragment="", query="").geturl()
                     if clean_url not in self.visited_urls:
-                        # Solo seguir enlaces relacionados con la misma ciudad
                         if self._is_url_relevant(clean_url, city):
                             priority = self._calculate_priority(link, depth + 1)
                             yield scrapy.Request(

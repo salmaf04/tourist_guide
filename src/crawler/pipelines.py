@@ -19,10 +19,10 @@ class ChromaPipeline:
 
     def process_item(self, item: TouristPlaceItem, spider):
         text_to_embed = f"""
-Name: {item['name']}
-City: {item['city']}
-Category: {item['category']}
-Description: {item['description']}
+        Name: {item['name']}
+        City: {item['city']}
+        Category: {item['category']}
+        Description: {item['description']}
         """.strip()
         embedding = self.embedding_model.encode(text_to_embed).tolist()
         metadata = {

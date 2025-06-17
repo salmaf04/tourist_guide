@@ -1,6 +1,7 @@
 from mesa import Model, Agent
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
+from .bdi import AgenteBDI
 
 
 @dataclass
@@ -14,25 +15,59 @@ class Nodo:
     descripcion: str
     agentes: List[str]
 
-class Agente(Agent):
+class AgenteBDIBase(AgenteBDI):
     """
-    Agente de la simulación, asociado a un rol y un lugar.
+    Agente BDI genérico para la simulación turística.
+    Puede ser extendido para roles específicos.
     """
-    def __init__(self, unique_id: str, model, rol: str, lugar_id: str, prompt: str):
-        super().__init__(model)
-        self.unique_id = unique_id
+    def __init__(self, unique_id, model, rol, lugar_id, prompt):
+        super().__init__(unique_id, model)
         self.rol = rol
         self.lugar_id = lugar_id
         self.prompt = prompt
         self.interacciones = []
 
-class Turista(Agent):
+    def percibir(self):
+        # Ejemplo: percibir entorno, estado propio, etc.
+        self.beliefs['lugar_id'] = self.lugar_id
+        self.beliefs['rol'] = self.rol
+        # ...agregar percepciones relevantes...
+
+    def deliberar(self):
+        # Ejemplo: generar deseos según creencias
+        if 'satisfaccion' in self.beliefs and self.beliefs['satisfaccion'] < 7:
+            if 'aumentar_satisfaccion' not in self.desires:
+                self.desires.append('aumentar_satisfaccion')
+        # ...otros deseos...
+
+    def filtrar_deseos(self):
+        # Priorizar deseos y convertir en intenciones
+        if 'aumentar_satisfaccion' in self.desires and 'buscar_interaccion_positiva' not in self.intentions:
+            self.intentions.append('buscar_interaccion_positiva')
+
+    def planificar(self):
+        # Generar plan concreto para cada intención
+        self.plan = []
+        for intention in self.intentions:
+            if intention == 'buscar_interaccion_positiva':
+                self.plan.append('interactuar_con_turista')
+        # ...otros planes...
+
+    def actuar(self):
+        # Ejecutar la siguiente acción del plan
+        if self.plan:
+            accion = self.plan.pop(0)
+            if accion == 'interactuar_con_turista':
+                # Aquí se llamaría a la lógica de interacción
+                pass
+        # ...otras acciones...
+
+class TuristaBDI(AgenteBDI):
     """
-    Representa al turista, con memoria priorizada y satisfacción.
+    Turista con arquitectura BDI.
     """
-    def __init__(self, unique_id: int, model, nombre: str):
-        super().__init__(model)
-        self.unique_id = unique_id
+    def __init__(self, unique_id, model, nombre):
+        super().__init__(unique_id, model)
         self.nombre = nombre
         self.satisfaccion = 5.0
         self.memoria_alta = []
@@ -43,6 +78,35 @@ class Turista(Agent):
     LIMITE_ALTA = 5
     LIMITE_MEDIA = 7
     LIMITE_BAJA = 10
+
+    def percibir(self):
+        self.beliefs['satisfaccion'] = self.satisfaccion
+        # ...otros datos del entorno...
+
+    def deliberar(self):
+        if self.beliefs['satisfaccion'] < 7 and 'aumentar_satisfaccion' not in self.desires:
+            self.desires.append('aumentar_satisfaccion')
+
+    def filtrar_deseos(self):
+        if 'aumentar_satisfaccion' in self.desires and 'buscar_interaccion_positiva' not in self.intentions:
+            self.intentions.append('buscar_interaccion_positiva')
+
+    def planificar(self):
+        self.plan = []
+        for intention in self.intentions:
+            if intention == 'buscar_interaccion_positiva':
+                self.plan.append('buscar_agente_amigable')
+                self.plan.append('interactuar')
+
+    def actuar(self):
+        if self.plan:
+            accion = self.plan.pop(0)
+            if accion == 'buscar_agente_amigable':
+                # Buscar agentes con mayor amabilidad
+                pass
+            elif accion == 'interactuar':
+                # Ejecutar interacción
+                pass
 
     def agregar_experiencia(self, texto: str, impacto: float):
         """

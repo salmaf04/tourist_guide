@@ -9,6 +9,9 @@ from BestRoutes.meta_routes import RouteOptimizer
 from scrapy.crawler import CrawlerProcess
 from crawler.tourist_spider import TouristSpider
 from scrapy.utils.project import get_project_settings
+import datetime
+from sklearn.metrics.pairwise import cosine_similarity
+from utils.validation import is_incomplete_or_outdated, ensure_fresh_rag_data
 
 # Opciones de categorías según mock
 CATEGORIES = [
@@ -631,7 +634,19 @@ def app():
                     return
             
             # Mostrar resultados del RAG
+            user_query = user_notes if user_notes else city  # O ajusta según tu lógica de consulta
             if rag_data['filtered_places']:
+                # Validación modularizada y triggering del crawler
+                rag_data, reason, triggered_crawler = ensure_fresh_rag_data(
+                    rag_data, user_query, fetch_tourism_data, city, RAGPlanner, user_preferences, lat, lon, transport_mode
+                )
+                if triggered_crawler:
+                    if reason == "Datos completos y actualizados":
+                        st.success('✅ Datos actualizados correctamente.')
+                    else:
+                        st.warning(f'⚠️ Aún con limitaciones después de actualizar: {reason}')
+                elif reason != "Datos completos y actualizados":
+                    st.warning(f'⚠️ La información tiene limitaciones: {reason}. Mostrando resultados actuales.')
                 st.success(f"✅ ¡Encontrados {len(rag_data['filtered_places'])} lugares que coinciden con tus preferencias!")
                 
                 # Información del RAG

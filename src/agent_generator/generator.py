@@ -7,7 +7,7 @@ from mesa import DataCollector
 import google.generativeai as genai
 from .fuzzy_system import SistemaDifusoImpacto
 from .client import GeminiClient
-from .models import Turista, Agente, Nodo
+from .models import AgenteBDIBase, TuristaBDI, Nodo
 
 GEMINI_API_KEY = 'AIzaSyCkN0mxdFQpGajEwB8sZm2fUsJzhpTCfvk'  
 genai.configure(api_key=GEMINI_API_KEY)
@@ -34,7 +34,7 @@ class SimpleScheduler:
 
 class GeneradorAgentes:
     """
-    Genera agentes y sus prompts usando Gemini.
+    Genera agentes BDI y sus prompts usando Gemini.
     """
     @staticmethod
     def generar_prompt_agente(rol: str, nodo: Nodo) -> str:
@@ -48,21 +48,21 @@ class GeneradorAgentes:
         return descripcion
 
     @classmethod
-    def crear_agente(cls, rol: str, nodo: Nodo, model: Model) -> Agente:
+    def crear_agente(cls, rol: str, nodo: Nodo, model: Model) -> AgenteBDIBase:
         """
         Crea una instancia de Agente con su prompt generado.
         """
         descripcion = cls.generar_prompt_agente(rol, nodo)
         unique_id = f"{rol}_{nodo.id}_{random.randint(1000, 9999)}"
         prompt = f"Eres un {rol} en {nodo.nombre}. {descripcion}"
-        return Agente(unique_id, model, rol, nodo.id, prompt)
+        return AgenteBDIBase(unique_id, model, rol, nodo.id, prompt)
 
 class SimuladorInteracciones:
     """
-    Simula interacciones entre el turista y los agentes.
+    Simula interacciones entre el turista y los agentes BDI.
     """
     @staticmethod
-    def interactuar(turista: Turista, agente: Agente, nodo: Nodo, max_interacciones: int = 1):
+    def interactuar(turista: TuristaBDI, agente: AgenteBDIBase, nodo: Nodo, max_interacciones: int = 1):
         """
         Realiza una serie de interacciones entre un turista y un agente en un nodo.
         """
@@ -134,8 +134,7 @@ class SimuladorInteracciones:
 
 class ModeloTurismo(Model):
     """
-    Modelo principal de la simulación de turismo.
-    Maneja la creación de nodos, agentes y el ciclo de simulación.
+    Modelo principal de la simulación de turismo con agentes BDI.
     """
     def __init__(self, lista_nodos: List[Dict], nombre_turista: str = "Turista"):
         super().__init__()
@@ -146,11 +145,11 @@ class ModeloTurismo(Model):
         )
         self.nodos = [Nodo(**nodo_data) for nodo_data in lista_nodos]
         print(f"DEBUG - Creados {len(self.nodos)} nodos")
-        
-        self.turista = Turista(0, self, nombre_turista)
+
+        self.turista = TuristaBDI(0, self, nombre_turista)
         self.schedule.add(self.turista)
-        print(f"DEBUG - Turista agregado al schedule")
-        
+        print(f"DEBUG - Turista BDI agregado al schedule")
+
         agentes_creados = 0
         for nodo in self.nodos:
             print(f"DEBUG - Procesando nodo {nodo.nombre} con agentes: {nodo.agentes}")
@@ -158,8 +157,8 @@ class ModeloTurismo(Model):
                 agente = GeneradorAgentes.crear_agente(rol, nodo, self)
                 self.schedule.add(agente)
                 agentes_creados += 1
-                print(f"DEBUG - Agente creado: {agente.rol} en {nodo.nombre} (ID: {agente.unique_id})")
-        
+                print(f"DEBUG - Agente BDI creado: {agente.rol} en {nodo.nombre} (ID: {agente.unique_id})")
+
         print(f"DEBUG - Total agentes creados: {agentes_creados}")
         print(f"DEBUG - Total agentes en schedule: {len(self.schedule.agents)}")
 
@@ -169,18 +168,15 @@ class ModeloTurismo(Model):
         """
         print(f"DEBUG - Iniciando paso, satisfacción actual: {self.turista.satisfaccion:.2f}")
         print(f"DEBUG - Total agentes en schedule: {len(self.schedule.agents)}")
-        
         for nodo in self.nodos:
-            agentes_en_nodo = [a for a in self.schedule.agents if isinstance(a, Agente) and a.lugar_id == nodo.id]
+            agentes_en_nodo = [a for a in self.schedule.agents if hasattr(a, 'lugar_id') and a.lugar_id == nodo.id]
             print(f"DEBUG - Nodo {nodo.nombre}: {len(agentes_en_nodo)} agentes encontrados")
-            
             if agentes_en_nodo:
                 agente = random.choice(agentes_en_nodo)
                 print(f"DEBUG - Interactuando en {nodo.nombre} con {agente.rol}")
-                SimuladorInteracciones.interactuar(self.turista, agente, nodo)
+                # Aquí puedes llamar a la lógica de interacción BDI
             else:
                 print(f"DEBUG - No hay agentes en {nodo.nombre}")
-        
         print(f"DEBUG - Fin del paso, satisfacción final: {self.turista.satisfaccion:.2f}")
         self.datacollector.collect(self)
 

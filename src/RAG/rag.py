@@ -2,18 +2,22 @@ import numpy as np
 import requests
 import re
 import time
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Dict, List, Tuple, Any, Optional, Set
 from sentence_transformers import SentenceTransformer
 from geopy.distance import geodesic
 from geopy.geocoders import Nominatim
 from sklearn.metrics.pairwise import cosine_similarity
+from collections import Counter, defaultdict
 import logging
 import os
 from dotenv import load_dotenv
 import chromadb
-import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'agent_generator'))
+import nltk
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from nltk.stem import SnowballStemmer
 from client import GeminiClient
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -25,7 +29,7 @@ logger = logging.getLogger(__name__)
 class RAGPlanner:
     def __init__(self, model_name: str = "all-MiniLM-L6-v2", chroma_db_path: str = "db/"):
         """
-        Initialize the RAG Planner
+        Initialize the RAG Planner with NLP capabilities
         """
         self.model = SentenceTransformer(model_name)
         self.chroma_db_path = chroma_db_path
@@ -44,11 +48,87 @@ class RAGPlanner:
         # Get API keys
         self.openrouteservice_api_key = os.getenv('OPENROUTESERVICE_API_KEY')
 
+        # Initialize NLP components
+        self._init_nlp_components()
+
         # Validate API keys
         if not self.openrouteservice_api_key:
             raise ValueError("OPENROUTESERVICE_API_KEY not found in environment variables.")
 
-        logger.info("RAG Planner initialized with Gemini client and API keys successfully.")
+        logger.info("RAG Planner initialized with Gemini client, API keys, and NLP components successfully.")
+
+    def _init_nlp_components(self):
+        """Initialize essential NLP components for query processing."""
+        try:
+            # Download required NLTK data
+            self._download_nltk_data()
+            
+            # Get stopwords using NLTK
+            self.spanish_stopwords = self._get_nltk_stopwords()
+
+            # Initialize NLTK stemmer for Spanish
+            self.stemmer = SnowballStemmer('spanish')
+            
+            # Tourism-related keywords for enhanced processing
+            self.tourism_keywords = {
+                'attractions': ['museo', 'catedral', 'iglesia', 'palacio', 'castillo', 'parque', 'plaza', 'mercado'],
+                'activities': ['visitar', 'ver', 'conocer', 'explorar', 'caminar', 'disfrutar', 'admirar'],
+                'sentiments': ['hermoso', 'bonito', 'increíble', 'impresionante', 'maravilloso', 'espectacular'],
+                'time_expressions': ['mañana', 'tarde', 'noche', 'día', 'hora', 'tiempo', 'duración'],
+                'locations': ['centro', 'histórico', 'antiguo', 'moderno', 'tradicional', 'típico']
+            }
+
+            logger.info("NLP components initialized successfully")
+            
+        except Exception as e:
+            logger.error(f"Error initializing NLP components: {e}")
+            self.stemmer = None
+
+    def _download_nltk_data(self):
+        """Download required NLTK data packages."""
+        nltk_downloads = ['stopwords', 'punkt']
+        
+        for package in nltk_downloads:
+            try:
+                nltk.data.find(f'tokenizers/{package}')
+            except LookupError:
+                try:
+                    nltk.download(package, quiet=True)
+                    logger.info(f"Downloaded NLTK package: {package}")
+                except Exception as e:
+                    logger.warning(f"Failed to download NLTK package {package}: {e}")
+
+    def _get_nltk_stopwords(self) -> Set[str]:
+        """Get Spanish and English stopwords using NLTK."""
+        try:
+            # Get Spanish stopwords
+            spanish_stops = set(stopwords.words('spanish'))
+            
+            # Get English stopwords as fallback
+            try:
+                english_stops = set(stopwords.words('english'))
+            except:
+                english_stops = set()
+            
+            # Combine both sets
+            combined_stops = spanish_stops.union(english_stops)
+            
+            # Add some custom tourism-related stopwords
+            custom_stops = {
+                'www', 'http', 'https', 'com', 'org', 'es', 'html', 'php',
+                'turismo', 'tourism', 'tourist', 'guide', 'guía', 'información',
+                'info', 'página', 'page', 'web', 'site', 'sitio'
+            }
+            
+            combined_stops.update(custom_stops)
+            
+            logger.info(f"Loaded {len(combined_stops)} stopwords from NLTK")
+            return combined_stops
+            
+        except Exception as e:
+            logger.error(f"Error loading NLTK stopwords: {e}")
+            # Fallback to a minimal set
+            return {'de', 'la', 'el', 'en', 'y', 'a', 'que', 'es', 'se', 'no', 'te', 'lo', 'le', 'da', 'su', 'por', 'son', 'con', 'para', 'al', 'del', 'los', 'las', 'un', 'una'}
 
     def _init_chromadb(self):
         """Initialize ChromaDB client and collection."""
@@ -467,10 +547,12 @@ Location: {place.get('location', {}).get('city', '')} {place.get('location', {})
             return []
 
     def _create_search_query_from_preferences(self, user_preferences: Dict) -> str:
-        """Create a search query from user preferences."""
+        """Create a search query from user preferences using NLP processing with sentiment analysis."""
         query_parts = []
+        
         if 'city' in user_preferences:
             query_parts.append(f"tourist attractions in {user_preferences['city']}")
+            
         if 'category_interest' in user_preferences:
             high_interest_categories = [
                 category for category, score in user_preferences['category_interest'].items()
@@ -478,8 +560,29 @@ Location: {place.get('location', {}).get('city', '')} {place.get('location', {})
             ]
             if high_interest_categories:
                 query_parts.append(f"interested in {', '.join(high_interest_categories)}")
+                
         if 'user_notes' in user_preferences and user_preferences['user_notes']:
-            query_parts.append(user_preferences['user_notes'])
+            # Process user notes with NLP to extract relevant keywords and sentiment
+            processed_notes = self.preprocess_text(user_preferences['user_notes'])
+            keywords = self.extract_query_keywords(processed_notes, max_keywords=5)
+            sentiment = self.analyze_query_sentiment(user_preferences['user_notes'])
+            
+            # Build query based on keywords and sentiment
+            if keywords:
+                keyword_query = ' '.join(keywords)
+                
+                # Enhance query based on sentiment
+                if sentiment['sentiment'] == 'positive' and sentiment['confidence'] > 0.3:
+                    # User is enthusiastic, boost positive descriptors
+                    keyword_query += " amazing wonderful excellent"
+                elif sentiment['sentiment'] == 'negative' and sentiment['confidence'] > 0.3:
+                    # User has concerns, focus on quality and avoid negative aspects
+                    keyword_query += " quality recommended peaceful"
+                
+                query_parts.append(keyword_query)
+            else:
+                query_parts.append(processed_notes)
+                
         return ". ".join(query_parts)
 
     def _calculate_cosine_similarity(self, user_embedding: np.ndarray, place_embeddings: List[np.ndarray]) -> List[float]:

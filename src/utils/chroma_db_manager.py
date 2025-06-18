@@ -4,8 +4,7 @@ import chromadb
 import numpy as np
 import sys
 import os
-
-from crawler.content_extractor import TouristPlace
+from crawler.model import TouristPlace
 
 
 class ChromaDBManager:
@@ -23,11 +22,11 @@ class ChromaDBManager:
         """Añade un lugar turístico a la colección con su embedding."""
         doc_id = str(uuid.uuid4())
         text_representation = f"""
-Name: {place.name}
-City: {place.city}
-Category: {place.category}
-Description: {place.description}
-Coordinates: {place.coordinates if place.coordinates else 'Unknown'}
+        Name: {place.name}
+        City: {place.city}
+        Category: {place.category}
+        Description: {place.description}
+        Coordinates: {place.coordinates if place.coordinates else 'Unknown'}
         """.strip()
 
         metadata = {

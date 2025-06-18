@@ -1,304 +1,360 @@
-from crawler.content_extractor import ContentExtractor
-from crawler.items import TouristPlaceItem
+"""
+Spider principal reorganizado para el crawler turístico.
+"""
+
 import scrapy
-from urllib.parse import urlparse, urljoin
-from bs4 import BeautifulSoup
-import re
-from agent_generator.client import GeminiClient
 import json
+import numpy as np
+from urllib.parse import urljoin
+from bs4 import BeautifulSoup
+from sentence_transformers import SentenceTransformer
+import chromadb
+
+from crawler.items import TouristPlaceItem
+from crawler.model import TouristPlace
+from .config import CRAWLER_CONFIG, CITY_URLS, CITY_URLS_EXTRA
+from .filters import URLFilter
+from .city_utils import CityIdentifier
+from .content_processor import ContentProcessor
+from .stats_manager import StatsManager
+from agent_generator.client import GeminiClient
+from utils.chroma_db_manager import ChromaDBManager
 
 
 class TouristSpider(scrapy.Spider):
     name = "tourist_spider"
     
-    # URLs organizadas por ciudades
-    city_urls = {
-        "Madrid": [
-            "https://www.esmadrid.com/en/tourist-information",
-            "https://www.esmadrid.com/en/things-to-do-in-madrid",
-            "https://www.esmadrid.com/en/parks-gardens-madrid",
-            "https://www.esmadrid.com/en/museums",
-            "https://www.esmadrid.com/en/amusement-parks-and-zoos",
-            "https://www.esmadrid.com/en/visitor-services-madrid",
-            "https://www.spain.info/en/destination/madrid/",
-            "https://www.timeout.com/madrid/attractions",
-            "https://www.lonelyplanet.com/spain/madrid/attractions",
-            "https://www.tripadvisor.com/Attractions-g187514-Activities-Madrid.html",
-        ],
-        "Barcelona": [
-            "https://www.barcelonaturisme.com/wv3/en/",
-            "https://www.barcelonaturisme.com/wv3/en/what-to-do/",
-            "https://www.barcelonaturisme.com/wv3/en/what-to-see/",
-            "https://www.barcelonaturisme.com/wv3/en/museums/",
-            "https://www.spain.info/en/destination/barcelona/",
-            "https://www.barcelona.cat/en/what-to-do-in-bcn",
-            "https://www.timeout.com/barcelona/attractions",
-            "https://www.lonelyplanet.com/spain/barcelona/attractions",
-            "https://www.visitbarcelona.com/en/",
-            "https://bcnshop.barcelonaturisme.com/shopv3/en/",
-        ],
-        "Valencia": [
-            "https://www.visitvalencia.com/en",
-            "https://www.visitvalencia.com/en/what-to-see",
-            "https://www.visitvalencia.com/en/what-to-do",
-            "https://www.spain.info/en/destination/valencia/",
-            "https://www.valencia.es/en/visitor",
-            "https://www.timeout.com/valencia/attractions",
-            "https://www.lonelyplanet.com/spain/valencia/attractions",
-            "https://turismovalencia.es/en/",
-        ],
-        "Sevilla": [
-            "https://www.visitasevilla.es/en",
-            "https://www.visitasevilla.es/en/what-to-see",
-            "https://www.visitasevilla.es/en/what-to-do",
-            "https://www.spain.info/en/destination/seville/",
-            "https://www.sevilla.org/turismo/en",
-            "https://www.timeout.com/seville/attractions",
-            "https://www.lonelyplanet.com/spain/andalucia/seville/attractions",
-            "https://www.andalucia.org/en/seville-tourism",
-        ],
-        "Bilbao": [
-            "https://www.bilbaoturismo.net/BilbaoTurismo/en",
-            "https://www.bilbaoturismo.net/BilbaoTurismo/en/what-to-see",
-            "https://www.bilbaoturismo.net/BilbaoTurismo/en/what-to-do",
-            "https://www.spain.info/en/destination/bilbao/",
-            "https://www.bilbao.eus/en/tourism",
-            "https://www.timeout.com/bilbao/attractions",
-            "https://www.lonelyplanet.com/spain/basque-country/bilbao/attractions",
-            "https://turismo.euskadi.eus/en/destinations/bilbao/aa30-12375/en/",
-        ],
-        "Granada": [
-            "https://www.granadatur.com/en/",
-            "https://www.granadatur.com/en/what-to-see/",
-            "https://www.granadatur.com/en/what-to-do/",
-            "https://www.spain.info/en/destination/granada/",
-            "https://www.granada.org/inet/wturismo.nsf/home_en",
-            "https://www.timeout.com/granada/attractions",
-            "https://www.lonelyplanet.com/spain/andalucia/granada/attractions",
-            "https://www.andalucia.org/en/granada-tourism",
-        ],
-        "Toledo": [
-            "https://www.toledo-turismo.com/en/",
-            "https://www.toledo-turismo.com/en/what-to-see/",
-            "https://www.toledo-turismo.com/en/what-to-do/",
-            "https://www.spain.info/en/destination/toledo/",
-            "https://www.ayto-toledo.org/turismo/en/",
-            "https://www.timeout.com/toledo/attractions",
-            "https://www.lonelyplanet.com/spain/castilla-la-mancha/toledo/attractions",
-            "https://turismo.castillalamancha.es/en/destinations/toledo",
-        ],
-        "Salamanca": [
-            "https://www.salamanca.es/en/tourism",
-            "https://www.salamanca.es/en/tourism/what-to-see",
-            "https://www.salamanca.es/en/tourism/what-to-do",
-            "https://www.spain.info/en/destination/salamanca/",
-            "https://www.turismodesalamanca.com/en/",
-            "https://www.timeout.com/salamanca/attractions",
-            "https://www.lonelyplanet.com/spain/castilla-y-leon/salamanca/attractions",
-            "https://turismosalamanaca.com/en/",
-        ],
-        "Málaga": [
-            "https://www.malagaturismo.com/en/",
-            "https://www.malagaturismo.com/en/what-to-see/",
-            "https://www.malagaturismo.com/en/what-to-do/",
-            "https://www.spain.info/en/destination/malaga/",
-            "https://www.malaga.eu/en/tourism/",
-            "https://www.timeout.com/malaga/attractions",
-            "https://www.lonelyplanet.com/spain/andalucia/malaga/attractions",
-            "https://www.andalucia.org/en/malaga-tourism",
-            "https://www.costadelsol.travel/en/malaga",
-        ],
-        "San Sebastián": [
-            "https://www.sansebastianturismo.com/en/",
-            "https://www.sansebastianturismo.com/en/what-to-see/",
-            "https://www.sansebastianturismo.com/en/what-to-do/",
-            "https://www.spain.info/en/destination/san-sebastian/",
-            "https://www.donostia.eus/en/tourism",
-            "https://www.timeout.com/san-sebastian/attractions",
-            "https://www.lonelyplanet.com/spain/basque-country/san-sebastian/attractions",
-            "https://turismo.euskadi.eus/en/destinations/donostia-san-sebastian/aa30-12375/en/",
-        ],
-        "Córdoba": [
-            "https://www.turismodecordoba.org/en",
-            "https://www.turismodecordoba.org/en/what-to-see",
-            "https://www.turismodecordoba.org/en/what-to-do",
-            "https://www.spain.info/en/destination/cordoba/",
-            "https://www.cordoba.es/en/tourism",
-            "https://www.timeout.com/cordoba/attractions",
-            "https://www.lonelyplanet.com/spain/andalucia/cordoba/attractions",
-            "https://www.andalucia.org/en/cordoba-tourism",
-        ],
-        "Zaragoza": [
-            "https://www.zaragoza.es/ciudad/turismo/en/",
-            "https://www.zaragoza.es/ciudad/turismo/en/que-ver/",
-            "https://www.zaragoza.es/ciudad/turismo/en/que-hacer/",
-            "https://www.spain.info/en/destination/zaragoza/",
-            "https://www.turismodezaragoza.es/en/",
-            "https://www.timeout.com/zaragoza/attractions",
-            "https://www.lonelyplanet.com/spain/aragon/zaragoza/attractions",
-            "https://turismo.aragon.es/en/destinations/zaragoza",
-        ],
-        "Santander": [
-            "https://www.turismodesantander.com/en/",
-            "https://www.turismodesantander.com/en/what-to-see/",
-            "https://www.turismodesantander.com/en/what-to-do/",
-            "https://www.spain.info/en/destination/santander/",
-            "https://www.santander.es/en/tourism",
-            "https://www.timeout.com/santander/attractions",
-            "https://www.lonelyplanet.com/spain/cantabria/santander/attractions",
-            "https://turismodecantabria.com/en/destinations/santander",
-        ],
-        "Cádiz": [
-            "https://turismo.cadiz.es/en/",
-            "https://turismo.cadiz.es/en/what-to-see/",
-            "https://turismo.cadiz.es/en/what-to-do/",
-            "https://www.spain.info/en/destination/cadiz/",
-            "https://www.cadizturismo.com/en/",
-            "https://www.timeout.com/cadiz/attractions",
-            "https://www.lonelyplanet.com/spain/andalucia/cadiz/attractions",
-            "https://www.andalucia.org/en/cadiz-tourism",
-        ],
-        "Murcia": [
-            "https://www.murciaturistica.es/en/",
-            "https://www.murciaturistica.es/en/what-to-see/",
-            "https://www.murciaturistica.es/en/what-to-do/",
-            "https://www.spain.info/en/destination/murcia/",
-            "https://www.murcia.es/en/tourism",
-            "https://www.timeout.com/murcia/attractions",
-            "https://www.lonelyplanet.com/spain/murcia/attractions",
-            "https://www.murciaturistica.es/en/",
-        ],
-        "Palma de Mallorca": [
-            "https://www.visitpalma.com/en/",
-            "https://www.visitpalma.com/en/what-to-see/",
-            "https://www.visitpalma.com/en/what-to-do/",
-            "https://www.spain.info/en/destination/palma-de-mallorca/",
-            "https://www.palma.cat/en/tourism",
-            "https://www.timeout.com/palma/attractions",
-            "https://www.lonelyplanet.com/spain/balearic-islands/palma-de-mallorca/attractions",
-            "https://www.illesbalears.travel/en/balearic-islands/mallorca/palma",
-        ],
-    }
-
-    max_pages = 20
-    max_depth = 3
-    visited_urls = set()
-
-    def __init__(self, target_city=None, *args, **kwargs):
+    def __init__(self, target_city=None, max_pages=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.content_extractor = ContentExtractor()
-        self.llm_client = GeminiClient()  # Cliente Gemini
-        self.crawled_pages = 0
-        self.target_city = target_city
         
-        # Si se especifica una ciudad, solo usar sus URLs
-        if target_city and target_city in self.city_urls:
-            self.start_urls = self.city_urls[target_city]
-            self.logger.info(f"Crawler configurado para ciudad específica: {target_city}")
-            self.logger.info(f"URLs a procesar: {len(self.start_urls)}")
+        # Inicializar componentes
+        self.llm_client = GeminiClient()
+        self.url_filter = URLFilter(self.logger)
+        self.city_identifier = CityIdentifier(self.logger)
+        self.content_processor = ContentProcessor(self.llm_client, self.logger)
+        self.stats_manager = StatsManager(
+            max_pages_per_city=CRAWLER_CONFIG['max_pages_per_city'],
+            max_places_per_city=CRAWLER_CONFIG['max_places_per_city'],
+            logger=self.logger
+        )
+        
+        # Configuración
+        self.max_pages = CRAWLER_CONFIG['max_pages']
+        self.max_depth = CRAWLER_CONFIG['max_depth']
+        self.visited_urls = set()
+
+        # --- NUEVO: Gestión de ciudades pendientes y completadas ---
+        self.cities_pending = []
+        self.cities_completed = set()
+        self.current_city = None
+        # ----------------------------------------------------------
+
+        # FILTRO ANTI-MADRID: Bloquear Madrid como ciudad objetivo
+        if target_city and target_city.lower() == 'madrid':
+            self.logger.info(f"🚫 MADRID BLOQUEADO: No se procesará Madrid como ciudad objetivo")
+            self.target_city = "Barcelona"  # Usar Barcelona como alternativa
+            self.logger.info(f"✅ Usando {self.target_city} como ciudad alternativa")
         else:
-            # Si no se especifica ciudad, usar todas las URLs (comportamiento anterior)
-            self.start_urls = [url for city in self.city_urls.values() for url in city]
-            self.logger.info(f"Crawler configurado para todas las ciudades: {len(self.start_urls)} URLs")
+            self.target_city = target_city
         
-        # Mapa para asociar URLs a ciudades
-        self.url_to_city = {url: city for city, urls in self.city_urls.items() for url in urls}
+        # Configurar max_pages si se proporciona
+        if max_pages:
+            try:
+                self.max_pages = int(max_pages)
+            except (ValueError, TypeError):
+                self.max_pages = CRAWLER_CONFIG['max_pages']
+        
+        # Configurar URLs iniciales
+        self._setup_start_urls()
+        # Inicializar ChromaDB
+        self._setup_chroma_db()
+    
+    def _setup_start_urls(self):
+        """Configura las URLs iniciales del crawler y la gestión de ciudades."""
+        # Combinar ambos diccionarios para la búsqueda
+        self.city_urls = CITY_URLS
+        self.city_urls_extra = CITY_URLS_EXTRA
+        all_city_urls = {**self.city_urls, **self.city_urls_extra}
+
+        # --- NUEVO: Inicializar ciudades pendientes ---
+        self.cities_pending = [city for city in all_city_urls.keys() if city.lower() != 'madrid']
+        self.cities_completed = set()
+        self.current_city = self.cities_pending[0] if self.cities_pending else None
+        # ------------------------------------------------
+
+        # Si se especifica una ciudad y existe en el diccionario
+        if self.target_city and self.target_city in all_city_urls:
+            self.start_urls = all_city_urls[self.target_city]
+            self.current_city = self.target_city
+            self.cities_pending = [self.target_city]
+        else:
+            # Usar la primera ciudad pendiente
+            self.start_urls = all_city_urls[self.current_city] if self.current_city else []
+
+        self.logger.info(f"Configurando crawler para ciudades: {self.cities_pending}")
+        self.logger.info(f"Total URLs iniciales: {len(self.start_urls)}")
+
+        # Verificación crítica - asegurar que hay URLs
+        if not self.start_urls:
+            self.logger.error("¡No hay URLs iniciales válidas después del filtrado!")
+            # Opcional: agregar URLs de fallback
+            self.start_urls = [
+                "https://www.barcelonaturisme.com/wv3/en/",
+                "https://www.visitvalencia.com/en"
+            ]
+
+    def _setup_chroma_db(self):
+        """Inicializa ChromaDB y el modelo de embeddings."""
+        try:
+            # Inicializar cliente ChromaDB
+            import chromadb
+            chroma_client = chromadb.PersistentClient(path="./db/")
+            
+            # Obtener o crear colección
+            try:
+                collection = chroma_client.get_collection(name="tourist_places")
+                self.logger.info("Usando colección existente 'tourist_places'")
+            except Exception:
+                collection = chroma_client.create_collection(name="tourist_places")
+                self.logger.info("Creada nueva colección 'tourist_places'")
+            
+            # Inicializar ChromaDB manager con la colección
+            self.chroma_manager = ChromaDBManager(collection)
+            
+            # Inicializar modelo de embeddings
+            self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+            
+            self.logger.info("ChromaDB y modelo de embeddings inicializados correctamente")
+            
+        except Exception as e:
+            self.logger.error(f"Error inicializando ChromaDB: {e}")
+            # Crear instancias dummy para evitar errores
+            self.chroma_manager = None
+            self.embedding_model = None
+
+    def _check_and_advance_city(self, city):
+        """Marca una ciudad como completada y avanza a la siguiente pendiente si es necesario."""
+        if city not in self.cities_completed:
+            self.cities_completed.add(city)
+            if city in self.cities_pending:
+                self.cities_pending.remove(city)
+        if self.current_city == city:
+            # Avanzar a la siguiente ciudad pendiente
+            if self.cities_pending:
+                self.current_city = self.cities_pending[0]
+                all_city_urls = {**self.city_urls, **self.city_urls_extra}
+                self.start_urls = all_city_urls[self.current_city]
+                self.logger.info(f"➡️ Cambiando a la siguiente ciudad: {self.current_city}")
+            else:
+                self.current_city = None
+                self.start_urls = []
+                self.logger.info("✅ Todas las ciudades procesadas")
 
     def parse(self, response):
-        if self.crawled_pages >= self.max_pages:
+        """Método principal de parsing."""
+        self.logger.info(f"Procesando URL: {response.url}")
+        
+        # FILTRO ANTI-MADRID: Verificación adicional
+        if self.url_filter.is_madrid_url(response.url):
+            self.logger.info(f"🚫 URL de Madrid bloqueada en parse: {response.url}")
             return
+        
+        # Control del número máximo de páginas
+        if self.stats_manager.crawled_pages >= self.max_pages:
+            return
+        
+        # Identificar ciudad de la URL actual
+        current_city = self.city_identifier.get_city_from_url(response.url)
 
-        self.crawled_pages += 1
+        # --- NUEVO: Saltar ciudades completadas ---
+        if current_city in self.cities_completed:
+            self.logger.info(f"🚫 Ciudad {current_city} ya completada. Saltando URL: {response.url}")
+            return
+        # ------------------------------------------------
+
+        # CONTROL DE UMBRAL POR CIUDAD
+        if not self.stats_manager.can_process_city_page(current_city):
+            self.logger.info(f"🚫 Límite de páginas alcanzado para {current_city}")
+            self._check_and_advance_city(current_city)
+            return
+        
+        if not self.stats_manager.can_add_city_place(current_city):
+            self.logger.info(f"🚫 Límite de lugares alcanzado para {current_city}")
+            self._check_and_advance_city(current_city)
+            return
+        
+        # Actualizar contadores
+        self.stats_manager.increment_page_count(current_city)
+        self.stats_manager.increment_crawled_pages()
         self.visited_urls.add(response.url)
-        self.logger.info(f"Processing URL {self.crawled_pages}/{self.max_pages}: {response.url}")
-
-        city = self._get_city_from_url(response.url)
-        soup = BeautifulSoup(response.text, 'html.parser')
-
-        # Extraer texto crudo principal de la página
-        for script in soup(["script", "style", "noscript"]):
-            script.decompose()
-        raw_text = ' '.join(soup.stripped_strings)
-        raw_text = raw_text[:6000]  # Limitar longitud para el LLM si es necesario
-
-        prompt = (
-            f"Extrae y devuelve en JSON los siguientes campos del texto de una página turística: "
-            f"nombre, ciudad, categoria, descripcion, coordenadas. "
-            f"Si no encuentras algún campo, déjalo vacío o null. "
-            f"Texto de la página:\n\n{raw_text}\n\n"
-            f"Devuelve solo el JSON."
-        )
-        llm_response = self.llm_client.generate(prompt)
+        
+        self.logger.info(f"Processing URL {self.stats_manager.crawled_pages}/{self.max_pages}: {response.url} (Ciudad: {current_city})")
+        
+        # Procesar contenido de la página
+        yield from self._process_page_content(response, current_city)
+        
+        # Mostrar estadísticas periódicamente
+        if self.stats_manager.should_log_stats():
+            self.stats_manager.log_diversity_stats()
+        
+        # Continuar con el crawling
+        yield from self._follow_links(response, current_city)
+    
+    def _process_page_content(self, response, current_city):
+        """Procesa el contenido de una página y extrae lugares turísticos."""
         try:
-            data = json.loads(llm_response)
-            # Guardar el JSON en un archivo (uno por línea)
-            with open("lugares_llm.json", "a", encoding="utf-8") as f:
-                f.write(json.dumps(data, ensure_ascii=False) + "\n")
-            # Crear el item para el pipeline y la base de datos
-            item = TouristPlaceItem()
-            item['name'] = data.get('nombre')
-            item['city'] = data.get('ciudad')
-            item['description'] = data.get('descripcion')
-            item['category'] = data.get('categoria')
-            item['coordinates'] = data.get('coordenadas')
-            yield item
+            # Procesar contenido con LLM
+            lugares = self.content_processor.process_page_content(response, current_city)
+            
+            if not lugares:
+                self.logger.warning(f"No se encontraron lugares en {response.url}")
+                return
+            
+            # Guardar lugares en archivo
+            self.content_processor.save_places_to_file(lugares)
+            
+            # Procesar cada lugar encontrado
+            places_added = 0
+            for lugar in lugares:
+                try:
+                    # Mejorar identificación de ciudad
+                    lugar_ciudad = self._improve_city_identification(lugar, response.url, current_city)
+                    
+                    # Crear item para el pipeline
+                    item = self._create_tourist_item(lugar, lugar_ciudad)
+                    
+                    # Guardar en ChromaDB
+                    if self._save_to_chroma_db(item):
+                        places_added += 1
+                        self.stats_manager.increment_place_count(lugar_ciudad)
+                        self.logger.info(f"Lugar agregado: {item['name']} ({lugar_ciudad}) - Total en {lugar_ciudad}: {self.stats_manager.get_city_place_count(lugar_ciudad)}")
+                        yield item
+                    
+                except Exception as e:
+                    self.logger.error(f"Error procesando lugar individual {lugar.get('nombre', 'N/A')}: {e}")
+            
+            if places_added == 0:
+                self.logger.warning(f"No se agregaron lugares desde {response.url}")
+            else:
+                self.logger.info(f"Total de lugares agregados desde {response.url}: {places_added}")
+                
         except Exception as e:
-            self.logger.warning(f"Error procesando respuesta LLM: {e}")
-
-        if self.crawled_pages < self.max_pages:
-            depth = response.meta.get('depth', 0)
-            if depth < self.max_depth:
-                for link in soup.find_all('a', href=True):
-                    href = link['href']
-                    abs_url = urljoin(response.url, href)
-                    clean_url = urlparse(abs_url)._replace(fragment="", query="").geturl()
-                    if clean_url not in self.visited_urls:
-                        if self._is_url_relevant(clean_url, city):
-                            priority = self._calculate_priority(link, depth + 1)
-                            yield scrapy.Request(
-                                clean_url,
-                                callback=self.parse,
-                                meta={'depth': depth + 1, 'city': city},
-                                priority=priority
-                            )
-
-    def _get_city_from_url(self, url: str) -> str:
-        """Obtiene la ciudad asociada a la URL."""
-        for city_name, urls in self.city_urls.items():
-            for city_url in urls:
-                if url.startswith(city_url) or city_name.lower() in url.lower():
-                    return city_name
-        return "Unknown"
-
-    def _is_url_relevant(self, url: str, city: str) -> bool:
-        """Verifica si la URL es relevante para la ciudad."""
-        city_lower = city.lower()
-        url_lower = url.lower()
+            self.logger.error(f"Error general procesando {response.url}: {e}")
+    
+    def _improve_city_identification(self, lugar, url, current_city):
+        """Mejora la identificación de ciudad usando múltiples estrategias."""
+        lugar_ciudad = lugar.get('ciudad', current_city)
         
-        # Si tenemos una ciudad objetivo específica, ser más estricto
-        if self.target_city:
-            target_city_lower = self.target_city.lower()
-            # Solo seguir enlaces que contengan el nombre de la ciudad objetivo
-            # o que estén en dominios conocidos de esa ciudad
-            if target_city_lower not in url_lower:
-                # Verificar si la URL pertenece a un dominio conocido de la ciudad objetivo
-                for known_url in self.city_urls.get(self.target_city, []):
-                    domain = urlparse(known_url).netloc
-                    if domain in url_lower:
-                        break
-                else:
-                    return False
+        # Aplicar múltiples estrategias para evitar "Unknown"
+        if lugar_ciudad == "Unknown" or not lugar_ciudad or lugar_ciudad.strip() == "":
+            # Estrategia 1: Inferir del contexto
+            lugar_ciudad = self.city_identifier.infer_city_from_context(
+                lugar.get('nombre'), url, current_city
+            )
+            
+            # Estrategia 2: Si sigue siendo Unknown, usar la ciudad de la URL
+            if lugar_ciudad == "Unknown" and current_city != "Unknown":
+                lugar_ciudad = current_city
+                self.logger.debug(f"Usando ciudad de URL: {current_city} para {lugar.get('nombre')}")
+            
+            # Estrategia 3: Buscar en el nombre del lugar
+            if lugar_ciudad == "Unknown":
+                lugar_ciudad = self.city_identifier.extract_city_from_place_name(lugar.get('nombre', ''))
+            
+            # Estrategia 4: Como último recurso, usar la ciudad más común
+            if lugar_ciudad == "Unknown":
+                lugar_ciudad = self.stats_manager.get_most_common_city() or "Barcelona"
+                self.logger.debug(f"Usando ciudad más común como fallback: {lugar_ciudad} para {lugar.get('nombre')}")
         
-        # Prioriza URLs que contengan el nombre de la ciudad o parezcan relacionadas
-        return city_lower in url_lower or any(term in url_lower for term in ['tourism', 'attraction', 'place', 'visit'])
-
-    def _calculate_priority(self, link, depth):
-        priority = 5
-        priority -= depth * 2
-        link_text = link.get_text().lower()
-        if any(term in link_text for term in ['attraction', 'place', 'museum', 'tour', 'visit']):
-            priority += 3
-        parent_classes = ' '.join(link.parent.get('class', []))
-        if any(cls in parent_classes for cls in ['list', 'item', 'card', 'attraction']):
-            priority += 2
-        return max(1, min(10, priority))
+        return lugar_ciudad
+    
+    def _create_tourist_item(self, lugar, ciudad):
+        """Crea un item TouristPlaceItem desde los datos del lugar."""
+        item = TouristPlaceItem()
+        item['name'] = lugar.get('nombre')
+        item['city'] = ciudad
+        item['description'] = lugar.get('descripcion')
+        item['category'] = lugar.get('categoria')
+        item['coordinates'] = lugar.get('coordenadas')
+        return item
+    
+    def _save_to_chroma_db(self, item):
+        """Guarda el item en ChromaDB."""
+        try:
+            # Verificar si ChromaDB está disponible
+            if not self.chroma_manager or not self.embedding_model:
+                self.logger.warning("ChromaDB no disponible - saltando guardado")
+                return True  # Retornar True para continuar el procesamiento
+            
+            name = item['name'] or "Sin nombre"
+            city_val = item['city'] or "Unknown"
+            category = item['category'] or "Sin categoría"
+            description = item['description'] or "Sin descripción"
+            coordinates = item['coordinates'] if item['coordinates'] else None
+            
+            # Validar datos
+            if not name or not city_val or not category or not description:
+                self.logger.warning(f"Lugar con datos incompletos: {name} - saltando")
+                return False
+            
+            # Crear objeto TouristPlace
+            place = TouristPlace(
+                name=name,
+                city=city_val,
+                category=category,
+                description=description,
+                coordinates=coordinates
+            )
+            
+            # Generar embedding
+            text_to_embed = f"Name: {name}\nCity: {city_val}\nCategory: {category}\nDescription: {description}"
+            embedding = self.embedding_model.encode(text_to_embed)
+            
+            # Guardar en ChromaDB
+            self.chroma_manager.add_place(place, np.array(embedding))
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error guardando en ChromaDB: {e}")
+            return False
+    
+    def _follow_links(self, response, current_city):
+        """Sigue enlaces relevantes para continuar el crawling, solo de ciudades pendientes."""
+        if self.stats_manager.crawled_pages >= self.max_pages:
+            return
+        depth = response.meta.get('depth', 0)
+        if depth >= self.max_depth:
+            return
+        try:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            for link in soup.find_all('a', href=True):
+                href = link['href']
+                abs_url = urljoin(response.url, href)
+                clean_url = abs_url.split('#')[0].split('?')[0]
+                if clean_url in self.visited_urls:
+                    continue
+                # Verificar ciudad del enlace
+                link_city = self.city_identifier.get_city_from_url(clean_url)
+                # --- NUEVO: Saltar ciudades completadas ---
+                if link_city in self.cities_completed:
+                    continue
+                # CONTROL DE UMBRAL: No seguir enlaces de ciudades que alcanzaron el límite
+                if not self.stats_manager.can_process_city_page(link_city):
+                    self.logger.debug(f"Saltando enlace de {link_city} - límite de páginas alcanzado")
+                    self._check_and_advance_city(link_city)
+                    continue
+                if not self.stats_manager.can_add_city_place(link_city):
+                    self.logger.debug(f"Saltando enlace de {link_city} - límite de lugares alcanzado")
+                    self._check_and_advance_city(link_city)
+                    continue
+                if self.url_filter.is_url_relevant(clean_url, link_city):
+                    # Priorizar ciudades con menos contenido
+                    priority = self.stats_manager.calculate_priority_with_diversity(link, depth + 1, link_city)
+                    yield scrapy.Request(
+                        clean_url,
+                        callback=self.parse,
+                        meta={'depth': depth + 1, 'city': link_city},
+                        priority=priority
+                    )
+        except Exception as e:
+            self.logger.error(f"Error siguiendo enlaces en {response.url}: {e}")

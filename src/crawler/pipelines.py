@@ -11,10 +11,26 @@ logger = logging.getLogger(__name__)
 class ChromaPipeline:
     def __init__(self):
         self.chroma_client = chromadb.PersistentClient(path="../db/")
-        self.collection = self.chroma_client.get_or_create_collection(
-            name="tourist_places",
-            embedding_function=embedding_functions.SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
-        )
+        
+        # Intentar obtener la colección existente primero
+        try:
+            self.collection = self.chroma_client.get_collection(name="tourist_places")
+            logger.info("Usando colección existente 'tourist_places' en pipeline")
+        except Exception:
+            # Si no existe, crear una nueva sin especificar embedding function
+            try:
+                self.collection = self.chroma_client.create_collection(name="tourist_places")
+                logger.info("Creada nueva colección 'tourist_places' en pipeline")
+            except Exception:
+                # Si ya existe pero hay conflicto, eliminarla y recrearla
+                try:
+                    self.chroma_client.delete_collection(name="tourist_places")
+                    logger.info("Colección existente eliminada en pipeline debido a conflicto")
+                except Exception:
+                    pass
+                self.collection = self.chroma_client.create_collection(name="tourist_places")
+                logger.info("Nueva colección 'tourist_places' creada en pipeline después de resolver conflicto")
+        
         self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
     def process_item(self, item: TouristPlaceItem, spider):

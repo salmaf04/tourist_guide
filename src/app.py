@@ -42,7 +42,6 @@ SCORE_LABELS = {
 }
 
 AVAILEABLE_CITIES = [
-    'Madrid',
     'Barcelona',
     'Valencia',
     'Sevilla',
@@ -572,7 +571,6 @@ def app():
         else:
             # Usar coordenadas del centro de la ciudad
             city_coords = {
-                'Madrid': (40.4168, -3.7038),
                 'Barcelona': (41.3851, 2.1734),
                 'Valencia': (39.4699, -0.3763),
                 'Sevilla': (37.3891, -5.9845),
@@ -589,7 +587,7 @@ def app():
                 'Murcia': (37.9922, -1.1307),
                 'Palma de Mallorca': (39.5696, 2.6502)
             }
-            lat, lon = city_coords.get(city, (40.4168, -3.7038))
+            lat, lon = city_coords.get(city, (41.3851, 2.1734))  # Default to Barcelona
             st.info(f"📍 Usando centro de {city} como punto de partida")
 
         # Procesamiento con RAG

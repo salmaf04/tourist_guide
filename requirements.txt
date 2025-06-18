@@ -15,3 +15,80 @@ spacy>=3.7.0
 google-generativeai>=0.3.0
 mesa>=3.2.0
 scikit-fuzzy>=0.5.0
+
+# Web Scraping Framework
+scrapy>=2.11.0
+twisted>=22.10.0
+
+# Data Processing
+pandas>=2.0.0
+json5>=0.9.0
+
+# Additional ML/AI Libraries
+openai>=1.0.0
+langchain>=0.1.0
+faiss-cpu>=1.7.4
+
+# Geographic and Routing
+folium>=0.14.0
+networkx>=3.1.0
+osmnx>=1.6.0
+
+# Database and Storage
+sqlalchemy>=2.0.0
+sqlite3
+
+# HTTP and API
+aiohttp>=3.8.0
+httpx>=0.24.0
+
+# Text Processing
+textblob>=0.17.1
+regex>=2023.0.0
+
+# Utilities
+tqdm>=4.65.0
+python-slugify>=8.0.0
+click>=8.1.0
+pyyaml>=6.0.0
+
+# Development and Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+black>=23.0.0
+flake8>=6.0.0
+
+# Async Support
+asyncio
+aiofiles>=23.1.0
+
+# Caching and Performance
+redis>=4.5.0
+lru-dict>=1.2.0
+
+# Logging
+loguru>=0.7.0
+
+# Security
+cryptography>=41.0.0
+
+# Image Processing (for tourist content)
+pillow>=10.0.0
+
+# Time and Date Handling
+pytz>=2023.3
+python-dateutil>=2.8.2
+
+# Web Driver Support (if needed for dynamic scraping)
+selenium>=4.15.0
+webdriver-manager>=4.0.0
+
+# Rate Limiting
+ratelimit>=2.2.1
+
+# Configuration Management
+configparser>=6.0.0
+toml>=0.10.2
+
+# Monitoring
+psutil>=5.9.0

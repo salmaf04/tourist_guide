@@ -1,5 +1,5 @@
 from mesa import Agent
-from .client import GeminiClient
+from .mistral_client import MistralClient
 import numpy as np
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, field
@@ -270,7 +270,7 @@ class AgenteBDI(Agent):
             self.strategy_weights = StrategyWeights.get_strategy_weights(self.strategy)
             
             # LLM con uso limitado
-            self.llm = GeminiClient()
+            self.llm = MistralClient()
             self.llm_call_count = 0
             self.max_llm_calls_per_step = 2  # Limitar llamadas por paso
             

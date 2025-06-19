@@ -20,7 +20,7 @@ from nltk.sentiment import SentimentIntensityAnalyzer
 from nltk.corpus import wordnet
 from nltk.tag import pos_tag
 from nltk.chunk import ne_chunk
-from agent_generator.client import GeminiClient
+from agent_generator.mistral_client import MistralClient
 
 
 # Load environment variables from .env file
@@ -53,8 +53,8 @@ class RAGPlanner:
         self.geocoder = Nominatim(user_agent="tourist_guide_app")
         self.coordinate_cache = {}
 
-        # Initialize Gemini client
-        self.gemini_client = GeminiClient()
+        # Initialize Mistral client
+        self.mistral_client = MistralClient()
 
         # Get API keys
         self.openrouteservice_api_key = os.getenv('OPENROUTESERVICE_API_KEY')
@@ -66,7 +66,7 @@ class RAGPlanner:
         if not self.openrouteservice_api_key:
             raise ValueError("OPENROUTESERVICE_API_KEY not found in environment variables.")
 
-        logger.info("RAG Planner initialized with Gemini client, API keys, and NLP components successfully.")
+        logger.info("RAG Planner initialized with Mistral client, API keys, and NLP components successfully.")
 
     def _init_nlp_components(self):
         """Initialize essential NLP components for query processing."""
@@ -635,17 +635,22 @@ Location: {place.get('location', {}).get('city', '')} {place.get('location', {})
 
         return filtered_places, filtered_embeddings, filtered_similarities
 
-    def _call_gemini_llm(self, prompt: str, system: Optional[str] = None) -> str:
-        """Call Gemini API for LLM response using the Gemini client."""
+    def _call_mistral_llm(self, prompt: str, system: Optional[str] = None) -> str:
+        """Call Mistral API for LLM response using the Mistral client."""
         try:
-            response = self.gemini_client.generate(prompt, system)
+            logger.info("🤖 Calling Mistral API...")
+            response = self.mistral_client.generate(prompt, system)
+            logger.info(f"🤖 Mistral API response received: {len(response) if response else 0} characters")
+            
             if response and response != "[Error de generación]" and response != "[Límite de solicitudes excedido]":
+                logger.info("✅ Mistral API call successful")
                 return response
             else:
-                raise RuntimeError(f"Gemini client failed to generate response: {response}")
+                logger.error(f"❌ Mistral client failed to generate response: {response}")
+                raise RuntimeError(f"Mistral client failed to generate response: {response}")
         except Exception as e:
-            logger.error(f"Error calling Gemini client: {e}")
-            raise RuntimeError(f"Failed to call Gemini LLM: {e}")
+            logger.error(f"❌ Error calling Mistral client: {e}")
+            raise RuntimeError(f"Failed to call Mistral LLM: {e}")
 
     def _get_llm_recommendation_prompt(self, places: List[Dict], user_preferences: Dict) -> str:
         """Generate a prompt for the LLM to estimate time and classify categories."""
@@ -737,25 +742,66 @@ Be realistic with time estimates and precise with category classification.
     def process_user_request(self, user_preferences: Dict, user_lat: float, user_lon: float, transport_mode: str) -> Dict[str, Any]:
         """Main RAG processing function."""
         search_query = self._create_search_query_from_preferences(user_preferences)
+        logger.info(f"🔍 Search query: {search_query}")
+        
         semantic_places = self._semantic_search_chroma(search_query, n_results=100)  # Buscar más lugares
+        logger.info(f"📊 Semantic search found {len(semantic_places)} places")
 
         city = user_preferences.get('city', '')
+        logger.info(f"🏙️ Target city: {city}")
+        
         if semantic_places and city:
             city_places = self._filter_places_by_city(semantic_places, city)
+            logger.info(f"📍 City filtering from semantic search: {len(city_places)} places")
             if not city_places:
                 city_places = self._filter_places_by_city(self.places_data, city)
+                logger.info(f"📍 City filtering from all data: {len(city_places)} places")
         else:
             city_places = self._filter_places_by_city(self.places_data, city)
+            logger.info(f"📍 City filtering from all data: {len(city_places)} places")
 
         if not city_places:
-            raise RuntimeError(f"No places found for city: {city}")
+            logger.error(f"❌ No places found for city: {city}")
+            # Let's check what cities are available
+            available_cities = set()
+            for place in self.places_data:
+                available_cities.add(place.get('location', {}).get('city', 'Unknown'))
+            logger.info(f"🏙️ Available cities in database: {sorted(list(available_cities))}")
+            raise RuntimeError(f"No places found for city: {city}. Available cities: {sorted(list(available_cities))}")
 
         max_distance_km = user_preferences.get('max_distance', 10)
+        logger.info(f"📏 Filtering by distance: {max_distance_km}km from ({user_lat}, {user_lon})")
+        
+        # Log some places before distance filtering
+        logger.info(f"📋 Places found for {city} before distance filtering:")
+        for i, place in enumerate(city_places[:5]):  # Show first 5 places
+            place_lat, place_lon = self._get_coordinates_from_place(place)
+            logger.info(f"  {i+1}. {place['name']} - Coords: {place_lat}, {place_lon}")
+        
         distance_filtered_places, _ = self._filter_places_by_distance(
             city_places, max_distance_km, user_lat, user_lon
         )
+        logger.info(f"📍 Distance filtering result: {len(distance_filtered_places)} places within {max_distance_km}km")
 
         if not distance_filtered_places:
+            logger.error(f"❌ No places found within {max_distance_km}km")
+            # Log detailed distance info for debugging
+            logger.info(f"🔍 Distance analysis for {city} places:")
+            for i, place in enumerate(city_places[:10]):  # Show first 10 places
+                place_lat, place_lon = self._get_coordinates_from_place(place)
+                if place_lat is not None and place_lon is not None:
+                    distance_km = geodesic((user_lat, user_lon), (place_lat, place_lon)).kilometers
+                    logger.info(f"  {i+1}. {place['name']} - {distance_km:.2f}km away")
+                else:
+                    logger.info(f"  {i+1}. {place['name']} - No coordinates available")
+            
+            # Try with a larger distance to see if there are any places at all
+            logger.info(f"🔍 Trying with 50km radius...")
+            extended_places, _ = self._filter_places_by_distance(
+                city_places, 50, user_lat, user_lon
+            )
+            logger.info(f"📍 Places within 50km: {len(extended_places)}")
+            
             raise RuntimeError(f"No places found within {max_distance_km}km.")
 
         # Generar embeddings para todos los lugares encontrados
@@ -782,7 +828,7 @@ Be realistic with time estimates and precise with category classification.
 
         # Procesar con LLM todos los lugares encontrados
         llm_prompt = self._get_llm_recommendation_prompt(filtered_places, user_preferences)
-        llm_response = self._call_gemini_llm(llm_prompt)
+        llm_response = self._call_mistral_llm(llm_prompt)
         llm_time_estimates, llm_categories = self._parse_llm_time_estimates(llm_response, filtered_places)
 
         # Actualizar categorías

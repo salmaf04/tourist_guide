@@ -20,7 +20,7 @@ def print_api_statistics():
     """Imprime las estadísticas de uso de la API al final de la ejecución"""
     try:
         print("\n" + "="*80)
-        print("🏁 FINALIZANDO SESIÓN - ESTADÍSTICAS DE LA API")
+        print("🏁 FINALIZANDO SESIÓN - ESTADÍSTICAS DE LA API DE LLM")
         print("="*80)
         api_counter.print_summary()
         
@@ -596,6 +596,7 @@ def app():
         else:
             # Usar coordenadas del centro de la ciudad
             city_coords = {
+                'Madrid': (40.4168, -3.7038),
                 'Barcelona': (41.3851, 2.1734),
                 'Valencia': (39.4699, -0.3763),
                 'Sevilla': (37.3891, -5.9845),
@@ -610,9 +611,10 @@ def app():
                 'Santander': (43.4623, -3.8099),
                 'Cádiz': (36.5297, -6.2920),
                 'Murcia': (37.9922, -1.1307),
-                'Palma de Mallorca': (39.5696, 2.6502)
+                'Palma de Mallorca': (39.5696, 2.6502),
+                'Ibiza': (38.9067, 1.4206)
             }
-            lat, lon = city_coords.get(city, (41.3851, 2.1734))  # Default to Barcelona
+            lat, lon = city_coords.get(city, (40.4168, -3.7038))  # Default to Madrid
             st.info(f"📍 Usando centro de {city} como punto de partida")
 
         # Procesamiento con RAG
@@ -635,6 +637,10 @@ def app():
             
             with st.spinner("🔍 Analizando tus preferencias y buscando lugares relevantes..."):
                 try:
+                    st.info(f"🔍 Coordenadas de búsqueda: {lat:.5f}, {lon:.5f}")
+                    st.info(f"🏙️ Ciudad objetivo: {city}")
+                    st.info(f"📏 Distancia máxima: {max_distance}km")
+                    
                     rag_planner = RAGPlanner()  # Usa la ruta por defecto que ya está configurada correctamente
                     transport_mode = selected_transport[0] if selected_transport else "A pie"
                     
@@ -699,12 +705,12 @@ def app():
                     
                     col1, col2, col3 = st.columns(3)
                     with col1:
-                        st.metric("Llamadas a API", stats['call_counts']['total_calls'])
+                        st.metric("Llamadas a LLM", stats['call_counts']['total_calls'])
                         st.metric("Tasa de éxito", f"{stats['call_counts']['success_rate']:.1f}%")
                     
                     with col2:
                         st.metric("Caracteres procesados", f"{stats['data_usage']['total_characters']:,}")
-                        st.metric("Tiempo en API", stats['timing']['total_api_time_formatted'])
+                        st.metric("Tiempo en LLM", stats['timing']['total_api_time_formatted'])
                     
                     with col3:
                         st.metric("Duración sesión", stats['session_info']['session_duration_formatted'])

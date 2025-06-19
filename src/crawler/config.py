@@ -11,7 +11,7 @@ CRAWLER_CONFIG = {
 }
 
 # URLs organizadas por ciudades principales
-spanish_cities_urls = {
+CITY_URLS = {
     "Madrid": [
         "https://www.spain.info/en/destination/madrid/",
         "https://www.timeout.com/madrid/things-to-do",

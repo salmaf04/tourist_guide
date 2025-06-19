@@ -17,7 +17,7 @@ from .filters import URLFilter
 from .city_utils import CityIdentifier
 from .content_processor import ContentProcessor
 from .stats_manager import StatsManager
-from agent_generator.client import GeminiClient
+from agent_generator.mistral_client import MistralClient
 from utils.chroma_db_manager import ChromaDBManager
 
 
@@ -28,7 +28,7 @@ class TouristSpider(scrapy.Spider):
         super().__init__(*args, **kwargs)
         
         # Inicializar componentes
-        self.llm_client = GeminiClient()
+        self.llm_client = MistralClient()
         self.url_filter = URLFilter(self.logger)
         self.city_identifier = CityIdentifier(self.logger)
         self.content_processor = ContentProcessor(self.llm_client, self.logger)

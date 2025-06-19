@@ -1,5 +1,5 @@
 """
-Sistema de conteo de llamadas a la API de Gemini
+Sistema de conteo de llamadas a la API de LLM (Gemini/Mistral)
 Intercepta y cuenta todas las llamadas realizadas durante la ejecución de la aplicación
 """
 
@@ -185,7 +185,7 @@ class GeminiAPICounter:
         stats = self.get_stats()
         
         print("\n" + "="*60)
-        print("📊 RESUMEN DE LLAMADAS A LA API DE GEMINI")
+        print("📊 RESUMEN DE LLAMADAS A LA API DE LLM")
         print("="*60)
         
         print(f"🕐 Sesión iniciada: {stats['session_info']['start_time']}")
@@ -242,7 +242,7 @@ def get_caller_info() -> Dict[str, str]:
 
 def count_gemini_calls(func):
     """
-    Decorator para contar automáticamente las llamadas a métodos de GeminiClient
+    Decorator para contar automáticamente las llamadas a métodos de LLM (GeminiClient/MistralClient)
     """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):

@@ -6,13 +6,13 @@ from mesa.space import MultiGrid
 from mesa import DataCollector
 import google.generativeai as genai
 from .fuzzy_system import SistemaDifusoImpacto
-from .client import GeminiClient
+from .mistral_client import MistralClient
 from .models import AgenteBDIBase, TuristaBDI, Nodo
 
 GEMINI_API_KEY = 'AIzaSyCkN0mxdFQpGajEwB8sZm2fUsJzhpTCfvk'  
 genai.configure(api_key=GEMINI_API_KEY)
 sistema_difuso = SistemaDifusoImpacto()
-gemini_client = GeminiClient()
+mistral_client = MistralClient()
 
 
 # Simple scheduler to replace RandomActivation 
@@ -42,7 +42,7 @@ class GeneradorAgentes:
         Genera un prompt para un agente usando Gemini.
         """
         prompt = f"Crea una descripción para un {rol} en {nodo.nombre} (2 oraciones)."
-        descripcion = gemini_client.generate(prompt)
+        descripcion = mistral_client.generate(prompt)
         if descripcion == "[Respuesta no disponible]":
             return f"Un {rol} en {nodo.nombre}"
         return descripcion
@@ -88,7 +88,7 @@ class SimuladorInteracciones:
                 f"Responde en español con una frase corta y amigable."
             )
             
-            respuesta_texto = gemini_client.generate(prompt)
+            respuesta_texto = mistral_client.generate(prompt)
             
             if not respuesta_texto or respuesta_texto in ["[Respuesta no disponible]", "[Error de generación]"]:
                 respuestas_fallback = [

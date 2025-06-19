@@ -321,7 +321,7 @@ class TestCreator:
         
         crawler_success = app.fetch_tourism_data(user_preferences['city'])
 
-        rag_planner = app.RAGPlanner(chroma_db_path="db/")
+        rag_planner = app.RAGPlanner()  # Usa la ruta por defecto que ya está configurada correctamente
 
         rag_data = rag_planner.process_user_request(user_preferences, lat, lon, transport_mode)
 

@@ -594,19 +594,7 @@ def app():
         st.markdown("### 🤖 Procesando Recomendaciones con IA")
         
         try:
-            
- 
-           # PASO 1: Obtener datos actualizados del crawler
-            crawler_success = fetch_tourism_data(city)
-            
-            if not crawler_success:
-                st.error("❌ No se pudieron obtener datos turísticos para esta ciudad.")
-                st.info("💡 Intenta:")
-                st.write("- Seleccionar una ciudad diferente")
-                st.write("- Verificar tu conexión a internet")
-                st.write("- Intentar nuevamente más tarde")
-                return
-            
+                       
             # PASO 2: Preparar preferencias del usuario
             user_preferences = {
                 'city': city,
@@ -622,7 +610,7 @@ def app():
             
             with st.spinner("🔍 Analizando tus preferencias y buscando lugares relevantes..."):
                 try:
-                    rag_planner = RAGPlanner(chroma_db_path="db/")
+                    rag_planner = RAGPlanner()  # Usa la ruta por defecto que ya está configurada correctamente
                     transport_mode = selected_transport[0] if selected_transport else "A pie"
                     
                     rag_data = rag_planner.process_user_request(user_preferences, lat, lon, transport_mode)

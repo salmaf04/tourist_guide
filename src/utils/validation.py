@@ -74,7 +74,7 @@ def ensure_fresh_rag_data(rag_data, user_query, fetch_tourism_data, city, RAGPla
         crawler_success = fetch_tourism_data(city)
         if crawler_success:
             self.logger.info(f"Crawler completado con éxito para {city}")
-            rag_planner = RAGPlanner(chroma_db_path="db/")
+            rag_planner = RAGPlanner()  # Usa la ruta por defecto que ya está configurada correctamente
             rag_data = rag_planner.process_user_request(user_preferences, lat, lon, transport_mode)
             is_incomplete, reason = is_incomplete_or_outdated(rag_data, user_query)
         else:

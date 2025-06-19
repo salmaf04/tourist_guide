@@ -102,3 +102,18 @@
 {"nombre": "Goya Museum. Ibercaja Collection - Camón Aznar Museum", "ciudad": "Zaragoza", "categoria": "Museo", "descripcion": "Located in Casa de Jerónimo Cósida, a 16th century Renaissance…", "coordenadas": null}
 {"nombre": "Virgin of Pilar Museum (Our lady of Pilar Basilica)", "ciudad": "Zaragoza", "categoria": "Museo", "descripcion": "An exhibition containing items from cloaks and jewels for the…", "coordenadas": null}
 {"nombre": "Nuestra Señora del Pilar Basilica", "ciudad": "Zaragoza", "categoria": "Basílica", "descripcion": "A jewel of Baroque art. Built between the 17th and", "coordenadas": null}
+{"nombre": "Parc Güell", "ciudad": "Barcelona", "categoria": "Parque", "descripcion": "Parque famoso por Gaudí y la arquitectura modernista, con vistas a la ciudad.", "coordenadas": null}
+{"nombre": "Paseo de Gracia", "ciudad": "Barcelona", "categoria": "Calle", "descripcion": "Calle con tiendas de marcas importantes en edificios emblemáticos.", "coordenadas": null}
+{"nombre": "Avinguda Diagonal", "ciudad": "Barcelona", "categoria": "Avenida", "descripcion": "Avenida con tiendas de marcas importantes en edificios emblemáticos.", "coordenadas": null}
+{"nombre": "Born district", "ciudad": "Barcelona", "categoria": "Barrio", "descripcion": "Área con diseño alternativo e innovador.", "coordenadas": null}
+{"nombre": "Las Ramblas", "ciudad": "Barcelona", "categoria": "Calle", "descripcion": "Calle popular para pasear.", "coordenadas": null}
+{"nombre": "La Boquería", "ciudad": "Barcelona", "categoria": "Mercado", "descripcion": "Mercado tradicional.", "coordenadas": null}
+{"nombre": "Beaches of Barcelona", "ciudad": "Barcelona", "categoria": "Playa", "descripcion": "Información sobre las playas de Barcelona: ubicación, estado de las banderas, temporada de baño y mucho más. Recuerda que está prohibido fumar en todas las playas.", "coordenadas": null}
+{"nombre": "Barcelona Grec Festival", "ciudad": "Barcelona", "categoria": "Festival", "descripcion": "El Festival Grec de Barcelona ofrece cientos de espectáculos, con teatro, música, danza, circo y mucho más.", "coordenadas": null}
+{"nombre": "Parks and gardens", "ciudad": "Barcelona", "categoria": "Parque", "descripcion": "Los parques y jardines de la ciudad la transforman en un espacio vivo y que respira.", "coordenadas": null}
+{"nombre": "Barcelona", "ciudad": "Barcelona", "categoria": "Ciudad", "descripcion": "Ciudad mencionada como destino turístico en Europa.", "coordenadas": null}
+{"nombre": "Sicily", "ciudad": "Sicily", "categoria": "Región", "descripcion": "Región italiana mencionada como destino turístico.", "coordenadas": null}
+{"nombre": "Barcelona", "ciudad": "Barcelona", "categoria": "ciudad", "descripcion": "Mencionada como una ciudad en Europa", "coordenadas": null}
+{"nombre": "Sicily", "ciudad": "Sicily", "categoria": "region", "descripcion": "Mencionada como una región en Europa", "coordenadas": null}
+{"nombre": "Cathedral", "ciudad": "Girona", "categoria": "religious site", "descripcion": "Its Romanesque origin is evident in its fortress-like appearance and strategic location, although the most remarkable element is an immense Gothic nave, the widest in medieval European architecture. It houses one of the finest examples of Catalan Romanesque textiles, the Tapestry of Creation.", "coordenadas": null}
+{"nombre": "Monastery of Sant Pere de Galligants", "ciudad": "Girona", "categoria": "religious site", "descripcion": "a historical-artistic monument", "coordenadas": null}

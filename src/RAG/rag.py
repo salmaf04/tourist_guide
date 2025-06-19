@@ -27,7 +27,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class RAGPlanner:
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2", chroma_db_path: str = "db/"):
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2", chroma_db_path: str = "src/crawler/db/"):
         """
         Initialize the RAG Planner with NLP capabilities
         """

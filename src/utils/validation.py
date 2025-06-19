@@ -66,17 +66,20 @@ def ensure_fresh_rag_data(rag_data, user_query, fetch_tourism_data, city, RAGPla
     Valida los datos RAG y, si son insuficientes, activa el crawler y reprocesa.
     Devuelve (rag_data_final, reason, triggered_crawler:bool)
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     is_incomplete, reason = is_incomplete_or_outdated(rag_data, user_query)
     triggered_crawler = False
     if is_incomplete:
-        self.logger.info(f"Datos insuficientes para {city}. Activando crawler...")
+        logger.info(f"Datos insuficientes para {city}. Activando crawler...")
         triggered_crawler = True
         crawler_success = fetch_tourism_data(city)
         if crawler_success:
-            self.logger.info(f"Crawler completado con éxito para {city}")
+            logger.info(f"Crawler completado con éxito para {city}")
             rag_planner = RAGPlanner()  # Usa la ruta por defecto que ya está configurada correctamente
             rag_data = rag_planner.process_user_request(user_preferences, lat, lon, transport_mode)
             is_incomplete, reason = is_incomplete_or_outdated(rag_data, user_query)
         else:
-            self.logger.error(f"Crawler falló para {city}")
+            logger.error(f"Crawler falló para {city}")
     return rag_data, reason, triggered_crawler

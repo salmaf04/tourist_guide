@@ -103,19 +103,19 @@ class SimuladorInteracciones:
             else:
                 print(f"Respuesta de API: {respuesta_texto}")
             
-            amabilidad_valor = random.uniform(2, 10)
+            # Generar amabilidad más realista basada en el tipo de lugar y agente
+            base_amabilidad = SimuladorInteracciones._get_base_amabilidad(agente.rol, nodo.tipo)
+            amabilidad_valor = random.uniform(base_amabilidad - 1.5, base_amabilidad + 1.5)
+            amabilidad_valor = max(1, min(10, amabilidad_valor))
             
             print(f"DEBUG - Antes del impacto: satisfacción={turista.satisfaccion:.2f}")
-            impacto = sistema_difuso.calcular_impacto(amabilidad_valor, turista.satisfaccion)
             
-            if abs(impacto) < 0.1:
-                if amabilidad_valor > 7:
-                    impacto = random.uniform(0.3, 1.2)
-                elif amabilidad_valor < 4:
-                    impacto = random.uniform(-1.2, -0.3)
-                else:
-                    impacto = random.uniform(-0.5, 0.5)
-                print(f"DEBUG - Impacto ajustado manualmente: {impacto:.2f}")
+            # Usar el sistema difuso mejorado con más parámetros
+            impacto = sistema_difuso.calcular_impacto(
+                amabilidad_valor=amabilidad_valor,
+                satisfaccion_actual=turista.satisfaccion,
+                lugar_tipo=nodo.tipo
+            )
             
             experiencia = f"{nodo.nombre} ({agente.rol}): {respuesta_texto}"
             
@@ -138,6 +138,45 @@ class SimuladorInteracciones:
             interacciones_realizadas += 1
             if random.random() > 0.8:
                 break
+
+    @staticmethod
+    def _get_base_amabilidad(rol: str, tipo_lugar: str) -> float:
+        """
+        Calcula la amabilidad base esperada según el rol del agente y tipo de lugar.
+        """
+        # Amabilidad base por rol
+        amabilidad_por_rol = {
+            'guía': 8.0,
+            'mesero': 7.5,
+            'vendedor': 6.5,
+            'curador': 7.0,
+            'chef': 6.0,
+            'jardinero': 7.5,
+            'historiador': 7.8,
+            'sacerdote': 8.5,
+            'asistente': 7.0,
+            'salvavidas': 8.0,
+            'fotógrafo': 6.5
+        }
+        
+        # Modificadores por tipo de lugar
+        modificadores_lugar = {
+            'museo': 0.2,      # Ambiente más formal, ligeramente menos amigable
+            'restaurante': 0.5, # Servicio al cliente importante
+            'parque': 0.3,     # Ambiente relajado
+            'monumento': 0.0,  # Neutral
+            'iglesia': 0.4,    # Ambiente acogedor
+            'mercado': -0.2,   # Puede ser más comercial/agresivo
+            'tienda': -0.1,    # Enfoque en ventas
+            'playa': 0.6,      # Ambiente muy relajado
+            'mirador': 0.2,    # Ambiente positivo
+            'atraccion': 0.1   # Neutral-positivo
+        }
+        
+        base = amabilidad_por_rol.get(rol, 7.0)
+        modificador = modificadores_lugar.get(tipo_lugar, 0.0)
+        
+        return max(3.0, min(9.5, base + modificador))
 
 class ModeloTurismo(Model):
     """
@@ -201,21 +240,68 @@ class ModeloTurismo(Model):
 
     def step(self):
         """
-        Ejecuta un paso de simulación: posibles interacciones en cada nodo y recolección de datos.
+        Ejecuta un paso de simulación mejorado con interacciones más realistas.
         """
         print(f"DEBUG - Iniciando paso, satisfacción actual: {self.turista.satisfaccion:.2f}")
         print(f"DEBUG - Total agentes en schedule: {len(self.schedule.agents)}")
-        for nodo in self.nodos:
-            agentes_en_nodo = [a for a in self.schedule.agents if hasattr(a, 'lugar_id') and a.lugar_id == nodo.id]
-            print(f"DEBUG - Nodo {nodo.nombre}: {len(agentes_en_nodo)} agentes encontrados")
+        
+        # Seleccionar un nodo aleatorio para visitar en este paso
+        if self.nodos:
+            nodo_actual = random.choice(self.nodos)
+            agentes_en_nodo = [a for a in self.schedule.agents if hasattr(a, 'lugar_id') and a.lugar_id == nodo_actual.id]
+            
+            print(f"DEBUG - Visitando {nodo_actual.nombre}: {len(agentes_en_nodo)} agentes encontrados")
+            
             if agentes_en_nodo:
+                # Seleccionar agente para interactuar
                 agente = random.choice(agentes_en_nodo)
-                print(f"DEBUG - Interactuando en {nodo.nombre} con {agente.rol}")
-                # Aquí puedes llamar a la lógica de interacción BDI
+                print(f"DEBUG - Interactuando en {nodo_actual.nombre} con {agente.rol}")
+                
+                # Realizar interacción usando el simulador mejorado
+                SimuladorInteracciones.interactuar(
+                    turista=self.turista,
+                    agente=agente,
+                    nodo=nodo_actual,
+                    max_interacciones=random.randint(1, 2)  # 1-2 interacciones por paso
+                )
             else:
-                print(f"DEBUG - No hay agentes en {nodo.nombre}")
+                print(f"DEBUG - No hay agentes en {nodo_actual.nombre}")
+                # Experiencia sin agente (autoexploración)
+                self._experiencia_autoexploracion(nodo_actual)
+        
+        # Ejecutar step de agentes BDI
+        self.schedule.step()
+        
         print(f"DEBUG - Fin del paso, satisfacción final: {self.turista.satisfaccion:.2f}")
         self.datacollector.collect(self)
+
+    def _experiencia_autoexploracion(self, nodo):
+        """
+        Simula una experiencia de autoexploración cuando no hay agentes disponibles.
+        """
+        experiencias_autoexploracion = [
+            f"Exploras {nodo.nombre} por tu cuenta, disfrutando del ambiente.",
+            f"Te tomas tu tiempo para apreciar los detalles de {nodo.nombre}.",
+            f"Caminas tranquilamente por {nodo.nombre}, observando todo a tu ritmo.",
+            f"Disfrutas de un momento de paz en {nodo.nombre}.",
+            f"Te sientes libre explorando {nodo.nombre} sin prisa."
+        ]
+        
+        experiencia = random.choice(experiencias_autoexploracion)
+        
+        # Impacto más moderado para autoexploración
+        impacto_base = random.uniform(-0.3, 0.8)
+        
+        # Ajustar según tipo de lugar
+        if nodo.tipo in ['parque', 'playa', 'mirador']:
+            impacto_base += 0.3  # Lugares naturales son mejores para autoexploración
+        elif nodo.tipo in ['museo', 'monumento']:
+            impacto_base -= 0.2  # Lugares que se benefician de guías
+        
+        impacto_final = max(-1.0, min(1.5, impacto_base))
+        
+        self.turista.agregar_experiencia(experiencia, impacto_final)
+        print(f"DEBUG - Autoexploración en {nodo.nombre}: impacto={impacto_final:.2f}")
 
 def ejecutar_simulaciones(n_simulaciones: int, pasos: int = 10):
     """

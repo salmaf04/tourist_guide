@@ -4,6 +4,7 @@ import time
 import os
 from dotenv import load_dotenv
 import google.generativeai as genai
+from utils.gemini_api_counter import count_gemini_calls
 
 # Load environment variables
 load_dotenv()
@@ -29,6 +30,7 @@ class GeminiClient:
         self.max_retries = 12
         self.retry_delay = 5  # seconds
 
+    @count_gemini_calls
     def generate(self, prompt: str, system: Optional[str] = None) -> str:
         """
         Genera una respuesta usando Gemini con reintentos por límite de tasa.

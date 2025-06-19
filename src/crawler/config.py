@@ -11,160 +11,82 @@ CRAWLER_CONFIG = {
 }
 
 # URLs organizadas por ciudades principales
-CITY_URLS = {
-    "Barcelona": [
-        "https://www.barcelonaturisme.com/wv3/en/",
-        "https://www.barcelonaturisme.com/wv3/en/what-to-do/",
-        "https://www.barcelonaturisme.com/wv3/en/what-to-see/",
-        "https://www.barcelonaturisme.com/wv3/en/museums/",
-        "https://www.spain.info/en/destination/barcelona/",
-        "https://www.barcelona.cat/en/what-to-do-in-bcn",
-        "https://www.timeout.com/barcelona/attractions",
-        "https://www.lonelyplanet.com/spain/barcelona/attractions",
-        "https://www.visitbarcelona.com/en/",
-        "https://bcnshop.barcelonaturisme.com/shopv3/en/",
+spanish_cities_urls = {
+    "Madrid": [
+        "https://www.spain.info/en/destination/madrid/",
+        "https://www.timeout.com/madrid/things-to-do",
+        "https://www.lonelyplanet.com/spain/madrid/attractions"
     ],
-    "Valencia": [
-        "https://www.visitvalencia.com/en",
-        "https://www.visitvalencia.com/en/what-to-see",
-        "https://www.visitvalencia.com/en/what-to-do",
-        "https://www.spain.info/en/destination/valencia/",
-        "https://www.valencia.es/en/visitor",
-        "https://www.timeout.com/valencia/attractions",
-        "https://www.lonelyplanet.com/spain/valencia/attractions",
-        "https://turismovalencia.es/en/",
-    ],
-    "Sevilla": [
-        "https://www.visitasevilla.es/en",
-        "https://www.visitasevilla.es/en/what-to-see",
-        "https://www.visitasevilla.es/en/what-to-do",
+    "Seville": [
         "https://www.spain.info/en/destination/seville/",
-        "https://www.sevilla.org/turismo/en",
-        "https://www.timeout.com/seville/attractions",
-        "https://www.lonelyplanet.com/spain/andalucia/seville/attractions",
-        "https://www.andalucia.org/en/seville-tourism",
-    ],
-    "Bilbao": [
-        "https://www.bilbaoturismo.net/BilbaoTurismo/en",
-        "https://www.bilbaoturismo.net/BilbaoTurismo/en/what-to-see",
-        "https://www.bilbaoturismo.net/BilbaoTurismo/en/what-to-do",
-        "https://www.spain.info/en/destination/bilbao/",
-        "https://www.bilbao.eus/en/tourism",
-        "https://www.timeout.com/bilbao/attractions",
-        "https://www.lonelyplanet.com/spain/basque-country/bilbao/attractions",
-        "https://turismo.euskadi.eus/en/destinations/bilbao/aa30-12375/en/",
+        "https://www.onthegotours.com/es/spain/guides/cities-to-visit-in-spain/seville/",
+        "https://thetourguy.com/travel-blog/spain/seville/top-things-to-do-in-seville/"
     ],
     "Granada": [
-        "https://www.granadatur.com/en/",
-        "https://www.granadatur.com/en/what-to-see/",
-        "https://www.granadatur.com/en/what-to-do/",
         "https://www.spain.info/en/destination/granada/",
-        "https://www.granada.org/inet/wturismo.nsf/home_en",
-        "https://www.timeout.com/granada/attractions",
-        "https://www.lonelyplanet.com/spain/andalucia/granada/attractions",
-        "https://www.andalucia.org/en/granada-tourism",
-    ],
-    "Toledo": [
-        "https://www.toledo-turismo.com/en/",
-        "https://www.toledo-turismo.com/en/what-to-see/",
-        "https://www.toledo-turismo.com/en/what-to-do/",
-        "https://www.spain.info/en/destination/toledo/",
-        "https://www.ayto-toledo.org/turismo/en/",
-        "https://www.timeout.com/toledo/attractions",
-        "https://www.lonelyplanet.com/spain/castilla-la-mancha/toledo/attractions",
-        "https://turismo.castillalamancha.es/en/destinations/toledo",
-    ],
-    "Salamanca": [
-        "https://www.salamanca.es/en/tourism",
-        "https://www.salamanca.es/en/tourism/what-to-see",
-        "https://www.salamanca.es/en/tourism/what-to-do",
-        "https://www.spain.info/en/destination/salamanca/",
-        "https://www.turismodesalamanca.com/en/",
-        "https://www.timeout.com/salamanca/attractions",
-        "https://www.lonelyplanet.com/spain/castilla-y-leon/salamanca/attractions",
-        "https://turismosalamanaca.com/en/",
-    ],
-    "Málaga": [
-        "https://www.malagaturismo.com/en/",
-        "https://www.malagaturismo.com/en/what-to-see/",
-        "https://www.malagaturismo.com/en/what-to-do/",
-        "https://www.spain.info/en/destination/malaga/",
-        "https://www.malaga.eu/en/tourism/",
-        "https://www.timeout.com/malaga/attractions",
-        "https://www.lonelyplanet.com/spain/andalucia/malaga/attractions",
-        "https://www.andalucia.org/en/malaga-tourism",
-        "https://www.costadelsol.travel/en/malaga",
-    ],
-    "San Sebastián": [
-        "https://www.sansebastianturismo.com/en/",
-        "https://www.sansebastianturismo.com/en/what-to-see/",
-        "https://www.sansebastianturismo.com/en/what-to-do/",
-        "https://www.spain.info/en/destination/san-sebastian/",
-        "https://www.donostia.eus/en/tourism",
-        "https://www.timeout.com/san-sebastian/attractions",
-        "https://www.lonelyplanet.com/spain/basque-country/san-sebastian/attractions",
-        "https://turismo.euskadi.eus/en/destinations/donostia-san-sebastian/aa30-12375/en/",
+        "https://www.travelandleisure.com/travel-guide/granada",
+        "https://www.europeanbestdestinations.com/destinations/granada/"
     ],
     "Córdoba": [
-        "https://www.turismodecordoba.org/en",
-        "https://www.turismodecordoba.org/en/what-to-see",
-        "https://www.turismodecordoba.org/en/what-to-do",
         "https://www.spain.info/en/destination/cordoba/",
-        "https://www.cordoba.es/en/tourism",
-        "https://www.timeout.com/cordoba/attractions",
-        "https://www.lonelyplanet.com/spain/andalucia/cordoba/attractions",
-        "https://www.andalucia.org/en/cordoba-tourism",
+        "https://travel.usnews.com/Cordoba_Spain/Things_To_Do/",
+        "https://www.kiwi.com/stories/five-of-the-best-cities-and-places-to-visit-in-spain/"
     ],
-    "Zaragoza": [
-        "https://www.zaragoza.es/ciudad/turismo/en/",
-        "https://www.zaragoza.es/ciudad/turismo/en/que-ver/",
-        "https://www.zaragoza.es/ciudad/turismo/en/que-hacer/",
-        "https://www.spain.info/en/destination/zaragoza/",
-        "https://www.turismodezaragoza.es/en/",
-        "https://www.timeout.com/zaragoza/attractions",
-        "https://www.lonelyplanet.com/spain/aragon/zaragoza/attractions",
-        "https://turismo.aragon.es/en/destinations/zaragoza",
+    "Toledo": [
+        "https://www.spain.info/en/destination/toledo/",
+        "https://www.planetware.com/tourist-attractions-/toledo-e-cas-to.htm",
+        "https://www.cuddlynest.com/blog/tourist-attractions-in-spain/"
     ],
-    "Santander": [
-        "https://www.turismodesantander.com/en/",
-        "https://www.turismodesantander.com/en/what-to-see/",
-        "https://www.turismodesantander.com/en/what-to-do/",
-        "https://www.spain.info/en/destination/santander/",
-        "https://www.santander.es/en/tourism",
-        "https://www.timeout.com/santander/attractions",
-        "https://www.lonelyplanet.com/spain/cantabria/santander/attractions",
-        "https://turismodecantabria.com/en/destinations/santander",
+    "Santiago de Compostela": [
+        "https://www.spain.info/en/destination/santiago-de-compostela/",
+        "https://www.lonelyplanet.com/spain/galicia/santiago-de-compostela/attractions",
+        "https://travel.usnews.com/Santiago_de_Compostela_Spain/Things_To_Do/"
+    ],
+    "San Sebastián": [
+        "https://www.spain.info/en/destination/san-sebastian/",
+        "https://www.europeanbestdestinations.com/destinations/san-sebastian/",
+        "https://www.onthegotours.com/es/spain/guides/best-places-to-visit-in-spain/"
+    ],
+    "Málaga": [
+        "https://www.spain.info/en/destination/malaga/",
+        "https://www.hdfcergo.com/travel-insurance/travel-guide/tourist-places-to-visit-in-spain",
+        "https://www.europeanbestdestinations.com/destinations/malaga/"
     ],
     "Cádiz": [
-        "https://turismo.cadiz.es/en/",
-        "https://turismo.cadiz.es/en/what-to-see/",
-        "https://turismo.cadiz.es/en/what-to-do/",
         "https://www.spain.info/en/destination/cadiz/",
-        "https://www.cadizturismo.com/en/",
-        "https://www.timeout.com/cadiz/attractions",
-        "https://www.lonelyplanet.com/spain/andalucia/cadiz/attractions",
-        "https://www.andalucia.org/en/cadiz-tourism",
+        "https://travel.usnews.com/Cadiz_Spain/Things_To_Do/",
+        "https://www.europeanbestdestinations.com/destinations/cadiz/"
     ],
-    "Murcia": [
-        "https://www.murciaturistica.es/en/",
-        "https://www.murciaturistica.es/en/what-to-see/",
-        "https://www.murciaturistica.es/en/what-to-do/",
-        "https://www.spain.info/en/destination/murcia/",
-        "https://www.murcia.es/en/tourism",
-        "https://www.timeout.com/murcia/attractions",
-        "https://www.lonelyplanet.com/spain/murcia/attractions",
-        "https://www.murciaturistica.es/en/",
+    "Ronda": [
+        "https://www.spain.info/en/destination/ronda/",
+        "https://www.europeanbestdestinations.com/destinations/ronda/",
+        "https://makespain.com/ronda/"
+    ],
+    "León": [
+        "https://www.spain.info/en/destination/leon/",
+        "https://www.lonelyplanet.com/spain/castilla-y-leon/leon/attractions",
+        "https://www.cuddlynest.com/blog/tourist-attractions-in-spain/"
+    ],
+    "Cuenca": [
+        "https://www.spain.info/en/destination/cuenca/",
+        "https://www.cuddlynest.com/blog/tourist-attractions-in-spain/",
+        "https://www.timeout.com/spain/things-to-do/best-cities-and-places-to-visit-in-spain"
+    ],
+    "Ávila": [
+        "https://www.spain.info/en/destination/avila/",
+        "https://thetourguy.com/travel-blog/spain/top-things-to-see-in-spain/",
+        "https://www.tripadvisor.com/Attractions-g187491-Activities-Avila_Castile_and_Leon.html"
     ],
     "Palma de Mallorca": [
-        "https://www.visitpalma.com/en/",
-        "https://www.visitpalma.com/en/what-to-see/",
-        "https://www.visitpalma.com/en/what-to-do/",
         "https://www.spain.info/en/destination/palma-de-mallorca/",
-        "https://www.palma.cat/en/tourism",
-        "https://www.timeout.com/palma/attractions",
-        "https://www.lonelyplanet.com/spain/balearic-islands/palma-de-mallorca/attractions",
-        "https://www.illesbalears.travel/en/balearic-islands/mallorca/palma",
+        "https://www.travelandleisure.com/travel-guide/palma-de-mallorca",
+        "https://www.europeanbestdestinations.com/destinations/palma-de-mallorca/"
     ],
+    "Tenerife": [
+        "https://www.spain.info/en/destination/tenerife/",
+        "https://www.holidify.com/places/tenerife/sightseeing-and-things-to-do.html",
+        "https://travel.usnews.com/Tenerife_Spain/Things_To_Do/"
+    ]
 }
 
 # URLs de ciudades adicionales

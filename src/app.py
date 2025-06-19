@@ -643,7 +643,7 @@ def app():
                     
                     if rag_data.get('llm_response'):
                         st.write("**Análisis del LLM:**")
-                        st.text_area("", rag_data['llm_response'][:500] + "...", height=100)
+                        st.text_area("Análisis LLM", rag_data['llm_response'][:500] + "...", height=100, label_visibility="collapsed")
                 
                 # Mostrar lugares recomendados
                 st.markdown("### 📍 Lugares Recomendados")
@@ -665,7 +665,7 @@ def app():
                             st.metric("Afinidad", f"{similarity:.2f}")
                 
                 # OPTIMIZACIÓN DE RUTAS CON METAHEURÍSTICA
-                display_route_optimization_results(rag_data, user_preferences, lat, lon, transport_mode)
+                display_route_optimization_results(rag_data, user_preferences)
                 
             else:
                 st.warning("⚠️ No se encontraron lugares que coincidan con tus criterios.")

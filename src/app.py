@@ -366,8 +366,8 @@ def fetch_tourism_data(city):
     
     with st.spinner(f"🔄 Extrayendo información turística actualizada de {city}..."):
         try:
-            # Inicializar cliente Chroma
-            chroma_client = chromadb.Client()
+            # Inicializar cliente Chroma con path personalizado
+            chroma_client = chromadb.PersistentClient(path="src/crawler/db")
             collection = chroma_client.get_or_create_collection(name="tourist_places")
             
             # Verificar documentos existentes para la ciudad

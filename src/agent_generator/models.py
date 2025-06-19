@@ -9,11 +9,18 @@ class Nodo:
     """
     Representa un nodo/lugar del recorrido turístico.
     """
-    id: str
-    nombre: str
-    tipo: str
-    descripcion: str
-    agentes: List[str]
+    id: str = ""
+    nombre: str = ""
+    tipo: str = ""
+    descripcion: str = ""
+    agentes: List[str] = field(default_factory=list)
+    
+    def __post_init__(self):
+        """Ensure agentes is always a list"""
+        if self.agentes is None:
+            self.agentes = []
+        elif not isinstance(self.agentes, list):
+            self.agentes = list(self.agentes) if hasattr(self.agentes, '__iter__') else [self.agentes]
 
 class AgenteBDIBase(AgenteBDI):
     """
@@ -21,11 +28,19 @@ class AgenteBDIBase(AgenteBDI):
     Puede ser extendido para roles específicos.
     """
     def __init__(self, unique_id, model, rol, lugar_id, prompt):
-        super().__init__(unique_id, model)
-        self.rol = rol
-        self.lugar_id = lugar_id
-        self.prompt = prompt
-        self.interacciones = []
+        try:
+            print(f"DEBUG - Inicializando AgenteBDIBase con unique_id={unique_id}, rol={rol}")
+            # Call parent init with correct parameter order
+            super().__init__(unique_id, model)
+            self.rol = rol
+            self.lugar_id = lugar_id
+            self.prompt = prompt
+            self.interacciones = []
+            print(f"DEBUG - AgenteBDIBase inicializado exitosamente")
+        except Exception as e:
+            print(f"ERROR - Fallo en __init__ de AgenteBDIBase: {str(e)}")
+            print(f"ERROR - Tipo de error: {type(e)}")
+            raise e
 
     def percibir(self):
         # Ejemplo: percibir entorno, estado propio, etc.
@@ -67,13 +82,21 @@ class TuristaBDI(AgenteBDI):
     Turista con arquitectura BDI.
     """
     def __init__(self, unique_id, model, nombre):
-        super().__init__(unique_id, model)
-        self.nombre = nombre
-        self.satisfaccion = 5.0
-        self.memoria_alta = []
-        self.memoria_media = []
-        self.memoria_baja = []
-        self.contexto_actual = []
+        try:
+            print(f"DEBUG - Inicializando TuristaBDI con unique_id={unique_id}, nombre={nombre}")
+            # Call parent init with correct parameter order
+            super().__init__(unique_id, model)
+            self.nombre = nombre
+            self.satisfaccion = 5.0
+            self.memoria_alta = []
+            self.memoria_media = []
+            self.memoria_baja = []
+            self.contexto_actual = []
+            print(f"DEBUG - TuristaBDI inicializado exitosamente")
+        except Exception as e:
+            print(f"ERROR - Fallo en __init__ de TuristaBDI: {str(e)}")
+            print(f"ERROR - Tipo de error: {type(e)}")
+            raise e
 
     LIMITE_ALTA = 5
     LIMITE_MEDIA = 7

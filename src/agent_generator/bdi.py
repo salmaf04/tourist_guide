@@ -6,14 +6,25 @@ class AgenteBDI(Agent):
     Agente BDI avanzado con memoria episódica, razonamiento multi-agente, auto-reflexión y estrategias configurables, todo asistido por LLM.
     """
     def __init__(self, unique_id, model, estrategia="equilibrada"):
-        super().__init__(unique_id, model)
-        self.beliefs = {}
-        self.desires = []
-        self.intentions = []
-        self.plan = []
-        self.llm = GeminiClient()
-        self.memoria_episodica = []  # [(percepcion, deseo, intencion, accion, resultado)]
-        self.estrategia = estrategia  # "exploratoria", "conservadora", "social", "equilibrada"
+        try:
+            print(f"DEBUG - Inicializando AgenteBDI con unique_id={unique_id}, estrategia={estrategia}")
+            # Call Mesa Agent constructor with only model - unique_id is auto-generated
+            super().__init__(model)
+            # Override the auto-generated unique_id if needed
+            if unique_id is not None:
+                self.unique_id = unique_id
+            self.beliefs = {}
+            self.desires = []
+            self.intentions = []
+            self.plan = []
+            self.llm = GeminiClient()
+            self.memoria_episodica = []  # [(percepcion, deseo, intencion, accion, resultado)]
+            self.estrategia = estrategia  # "exploratoria", "conservadora", "social", "equilibrada"
+            print(f"DEBUG - AgenteBDI inicializado exitosamente")
+        except Exception as e:
+            print(f"ERROR - Fallo en __init__ de AgenteBDI: {str(e)}")
+            print(f"ERROR - Tipo de error: {type(e)}")
+            raise e
 
     def percibir(self):
         contexto = self._generar_contexto_percepcion()

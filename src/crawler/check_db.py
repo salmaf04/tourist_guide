@@ -18,7 +18,11 @@ import json
 class DatabaseChecker:
     """Clase para verificar y explorar la base de datos ChromaDB"""
     
-    def __init__(self, db_path="../db"):
+    def __init__(self, db_path=None):
+        if db_path is None:
+            # Usar ruta absoluta desde la raíz del proyecto
+            base_dir = Path(__file__).parent.parent.parent.resolve()
+            db_path = str(base_dir / "src" / "crawler" / "db")
         self.db_path = db_path
         self.chroma_client = None
         self.collection = None

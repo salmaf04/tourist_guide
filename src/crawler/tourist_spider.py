@@ -68,6 +68,10 @@ class TouristSpider(scrapy.Spider):
         self._setup_start_urls()
         # Inicializar ChromaDB
         self._setup_chroma_db()
+        
+        # NUEVO: Cache de lugares existentes para prevenir duplicados
+        self.existing_places_cache = set()
+        self._load_existing_places_cache()
     
     def _setup_start_urls(self):
         """Configura las URLs iniciales del crawler y la gestión de ciudades."""
@@ -108,7 +112,7 @@ class TouristSpider(scrapy.Spider):
         try:
             # Inicializar cliente ChromaDB
             import chromadb
-            chroma_client = chromadb.PersistentClient(path="./db/")
+            chroma_client = chromadb.PersistentClient(path="src/crawler/db")
             
             # Obtener o crear colección
             try:
@@ -131,6 +135,70 @@ class TouristSpider(scrapy.Spider):
             # Crear instancias dummy para evitar errores
             self.chroma_manager = None
             self.embedding_model = None
+    
+    def _load_existing_places_cache(self):
+        """Carga un cache de lugares existentes para prevenir duplicados."""
+        try:
+            if not self.chroma_manager:
+                self.logger.warning("ChromaDB no disponible - cache de duplicados deshabilitado")
+                return
+            
+            # Obtener todos los lugares existentes
+            all_docs = self.chroma_manager.collection.get(include=["metadatas"])
+            
+            # Crear cache con clave normalizada (nombre + ciudad)
+            for metadata in all_docs["metadatas"]:
+                name = metadata.get("name", "").strip().lower()
+                city = metadata.get("city", "").strip().lower()
+                
+                if name and city:
+                    # Normalizar texto para comparación
+                    normalized_key = self._normalize_place_key(name, city)
+                    self.existing_places_cache.add(normalized_key)
+            
+            self.logger.info(f"Cache de duplicados cargado: {len(self.existing_places_cache)} lugares existentes")
+            
+        except Exception as e:
+            self.logger.error(f"Error cargando cache de duplicados: {e}")
+            self.existing_places_cache = set()
+    
+    def _normalize_place_key(self, name, city):
+        """Normaliza nombre y ciudad para crear clave única."""
+        import re
+        
+        def normalize_text(text):
+            if not text:
+                return ""
+            
+            # Convertir a minúsculas
+            text = text.lower().strip()
+            
+            # Remover acentos
+            replacements = {
+                'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ü': 'u',
+                'ñ': 'n', 'ç': 'c'
+            }
+            for old, new in replacements.items():
+                text = text.replace(old, new)
+            
+            # Remover caracteres especiales y espacios extra
+            text = re.sub(r'[^\w\s]', ' ', text)
+            text = re.sub(r'\s+', ' ', text)
+            
+            return text.strip()
+        
+        normalized_name = normalize_text(name)
+        normalized_city = normalize_text(city)
+        
+        return f"{normalized_name}|{normalized_city}"
+    
+    def _is_duplicate_place(self, name, city):
+        """Verifica si un lugar ya existe en la base de datos."""
+        if not name or not city:
+            return False
+        
+        normalized_key = self._normalize_place_key(name, city)
+        return normalized_key in self.existing_places_cache
 
     def _check_and_advance_city(self, city):
         """Marca una ciudad como completada y avanza a la siguiente pendiente si es necesario."""
@@ -279,7 +347,7 @@ class TouristSpider(scrapy.Spider):
         return item
     
     def _save_to_chroma_db(self, item):
-        """Guarda el item en ChromaDB."""
+        """Guarda el item en ChromaDB con verificación de duplicados."""
         try:
             # Verificar si ChromaDB está disponible
             if not self.chroma_manager or not self.embedding_model:
@@ -297,6 +365,11 @@ class TouristSpider(scrapy.Spider):
                 self.logger.warning(f"Lugar con datos incompletos: {name} - saltando")
                 return False
             
+            # NUEVO: Verificar duplicados antes de guardar
+            if self._is_duplicate_place(name, city_val):
+                self.logger.info(f"🚫 DUPLICADO DETECTADO: {name} ({city_val}) - saltando")
+                return False
+            
             # Crear objeto TouristPlace
             place = TouristPlace(
                 name=name,
@@ -312,6 +385,12 @@ class TouristSpider(scrapy.Spider):
             
             # Guardar en ChromaDB
             self.chroma_manager.add_place(place, np.array(embedding))
+            
+            # NUEVO: Añadir al cache para futuras verificaciones
+            normalized_key = self._normalize_place_key(name, city_val)
+            self.existing_places_cache.add(normalized_key)
+            
+            self.logger.debug(f"✅ Lugar guardado y añadido al cache: {name} ({city_val})")
             return True
             
         except Exception as e:

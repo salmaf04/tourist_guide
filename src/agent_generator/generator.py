@@ -52,10 +52,17 @@ class GeneradorAgentes:
         """
         Crea una instancia de Agente con su prompt generado.
         """
-        descripcion = cls.generar_prompt_agente(rol, nodo)
-        unique_id = f"{rol}_{nodo.id}_{random.randint(1000, 9999)}"
-        prompt = f"Eres un {rol} en {nodo.nombre}. {descripcion}"
-        return AgenteBDIBase(unique_id, model, rol, nodo.id, prompt)
+        try:
+            print(f"DEBUG - Generando prompt para {rol} en {nodo.nombre}")
+            descripcion = cls.generar_prompt_agente(rol, nodo)
+            unique_id = f"{rol}_{nodo.id}_{random.randint(1000, 9999)}"
+            prompt = f"Eres un {rol} en {nodo.nombre}. {descripcion}"
+            print(f"DEBUG - Creando AgenteBDIBase con unique_id={unique_id}")
+            return AgenteBDIBase(unique_id, model, rol, nodo.id, prompt)
+        except Exception as e:
+            print(f"ERROR - Fallo en crear_agente: {str(e)}")
+            print(f"ERROR - Tipo de error: {type(e)}")
+            raise e
 
 class SimuladorInteracciones:
     """
@@ -143,21 +150,51 @@ class ModeloTurismo(Model):
         self.datacollector = DataCollector(
             agent_reporters={"Satisfacción": lambda a: getattr(a, 'satisfaccion', None)}
         )
-        self.nodos = [Nodo(**nodo_data) for nodo_data in lista_nodos]
+
+        # Convert input to Nodo objects if they aren't already
+        self.nodos = []
+        for nodo_data in lista_nodos:
+            if isinstance(nodo_data, Nodo):
+                self.nodos.append(nodo_data)
+            else:
+                # Create a new dictionary with default values for missing fields
+                nodo_dict = {
+                    'id': nodo_data.get('id', ''),
+                    'nombre': nodo_data.get('nombre', ''),
+                    'tipo': nodo_data.get('tipo', ''),
+                    'descripcion': nodo_data.get('descripcion', ''),
+                    'agentes': nodo_data.get('agentes', [])
+                }
+                self.nodos.append(Nodo(**nodo_dict))
+
         print(f"DEBUG - Creados {len(self.nodos)} nodos")
 
-        self.turista = TuristaBDI(0, self, nombre_turista)
-        self.schedule.add(self.turista)
-        print(f"DEBUG - Turista BDI agregado al schedule")
+        # Initialize the tourist with proper parameters
+        try:
+            print(f"DEBUG - Intentando crear TuristaBDI con nombre: {nombre_turista}")
+            self.turista = TuristaBDI(unique_id=0, model=self, nombre=nombre_turista)
+            print(f"DEBUG - TuristaBDI creado exitosamente")
+            self.schedule.add(self.turista)
+            print(f"DEBUG - Turista BDI agregado al schedule")
+        except Exception as e:
+            print(f"ERROR - Fallo al crear TuristaBDI: {str(e)}")
+            print(f"ERROR - Tipo de error: {type(e)}")
+            raise e
 
         agentes_creados = 0
         for nodo in self.nodos:
             print(f"DEBUG - Procesando nodo {nodo.nombre} con agentes: {nodo.agentes}")
             for rol in nodo.agentes:
-                agente = GeneradorAgentes.crear_agente(rol, nodo, self)
-                self.schedule.add(agente)
-                agentes_creados += 1
-                print(f"DEBUG - Agente BDI creado: {agente.rol} en {nodo.nombre} (ID: {agente.unique_id})")
+                try:
+                    print(f"DEBUG - Intentando crear agente {rol} en {nodo.nombre}")
+                    agente = GeneradorAgentes.crear_agente(rol=rol, nodo=nodo, model=self)
+                    self.schedule.add(agente)
+                    agentes_creados += 1
+                    print(f"DEBUG - Agente BDI creado: {agente.rol} en {nodo.nombre} (ID: {agente.unique_id})")
+                except Exception as e:
+                    print(f"ERROR - Fallo al crear agente {rol} en {nodo.nombre}: {str(e)}")
+                    print(f"ERROR - Tipo de error: {type(e)}")
+                    raise e
 
         print(f"DEBUG - Total agentes creados: {agentes_creados}")
         print(f"DEBUG - Total agentes en schedule: {len(self.schedule.agents)}")

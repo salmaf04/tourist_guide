@@ -31,12 +31,19 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class RAGPlanner:
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2", chroma_db_path: str = "src/crawler/db/"):
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2", chroma_db_path: str = None):
         """
         Initialize the RAG Planner with NLP capabilities
         """
         self.model = SentenceTransformer(model_name)
-        self.chroma_db_path = chroma_db_path
+        
+        # Set default ChromaDB path if none provided
+        if chroma_db_path is None:
+            # Get the absolute path to the project root
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            self.chroma_db_path = os.path.join(project_root, "src", "crawler", "db")
+        else:
+            self.chroma_db_path = chroma_db_path
 
         # Initialize ChromaDB
         self._init_chromadb()

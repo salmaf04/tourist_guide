@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 class ChromaPipeline:
     def __init__(self):
-        self.chroma_client = chromadb.PersistentClient(path="../db/")
+        self.chroma_client = chromadb.PersistentClient(path="src/crawler/db")
         
         # Intentar obtener la colección existente primero
         try:

@@ -44,13 +44,13 @@ class RouteSimulator:
         self.places_data = places_data
         self.tourist_name = tourist_name
         
-    def convert_route_to_nodes(self, route: List[int], node_params: List[Dict]) -> List[Dict]:
+    def convert_route_to_nodes(self, route: List[int], node_params: List[Dict]) -> List:
         """
         Convierte una ruta (lista de índices) a una lista de nodos para la simulación.
         
         :param route: Lista de índices de nodos que representan la ruta
         :param node_params: Parámetros de los nodos del optimizador
-        :return: Lista de diccionarios con información de nodos para la simulación
+        :return: Lista de objetos Nodo para la simulación
         """
         nodos_simulacion = []
         
@@ -58,14 +58,14 @@ class RouteSimulator:
             if node_idx < len(node_params) and node_idx > 0:  # Asegurar que no es el nodo de inicio
                 node_param = node_params[node_idx]
                 
-                # Crear nodo para la simulación
-                nodo = {
-                    "id": f"nodo_{node_idx}",
-                    "nombre": node_param.get('place_name', f"Lugar {node_idx}"),
-                    "tipo": self._get_place_type(node_param),
-                    "descripcion": self._get_place_description(node_param),
-                    "agentes": self._get_place_agents(node_param)
-                }
+                # Crear nodo para la simulación usando la clase Nodo
+                nodo = Nodo(
+                    id=f"nodo_{node_idx}",
+                    nombre=node_param.get('place_name', f"Lugar {node_idx}"),
+                    tipo=self._get_place_type(node_param),
+                    descripcion=self._get_place_description(node_param),
+                    agentes=self._get_place_agents(node_param)
+                )
                 nodos_simulacion.append(nodo)
         
         return nodos_simulacion

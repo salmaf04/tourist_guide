@@ -16,6 +16,10 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.stem import SnowballStemmer
+from nltk.sentiment import SentimentIntensityAnalyzer
+from nltk.corpus import wordnet
+from nltk.tag import pos_tag
+from nltk.chunk import ne_chunk
 from agent_generator.client import GeminiClient
 
 
@@ -69,6 +73,14 @@ class RAGPlanner:
             # Initialize NLTK stemmer for Spanish
             self.stemmer = SnowballStemmer('spanish')
             
+            # Initialize VADER sentiment analyzer
+            try:
+                self.sentiment_analyzer = SentimentIntensityAnalyzer()
+                logger.info("VADER sentiment analyzer initialized")
+            except Exception as e:
+                logger.warning(f"Could not initialize VADER: {e}")
+                self.sentiment_analyzer = None
+            
             # Tourism-related keywords for enhanced processing
             self.tourism_keywords = {
                 'attractions': ['museo', 'catedral', 'iglesia', 'palacio', 'castillo', 'parque', 'plaza', 'mercado'],
@@ -86,11 +98,16 @@ class RAGPlanner:
 
     def _download_nltk_data(self):
         """Download required NLTK data packages."""
-        nltk_downloads = ['stopwords', 'punkt']
+        nltk_downloads = ['stopwords', 'punkt', 'vader_lexicon', 'wordnet', 'averaged_perceptron_tagger']
         
         for package in nltk_downloads:
             try:
-                nltk.data.find(f'tokenizers/{package}')
+                if package == 'vader_lexicon':
+                    nltk.data.find('vader_lexicon')
+                elif package in ['stopwords', 'punkt']:
+                    nltk.data.find(f'tokenizers/{package}')
+                else:
+                    nltk.data.find(f'corpora/{package}')
             except LookupError:
                 try:
                     nltk.download(package, quiet=True)
@@ -778,3 +795,149 @@ Be realistic with time estimates and precise with category classification.
             'data_source': "ChromaDB semantic search (all unique places)",
             'llm_categories': llm_categories
         }
+
+    def preprocess_text(self, text: str) -> str:
+        """Preprocess text using advanced NLTK techniques."""
+        if not text:
+            return ""
+        
+        try:
+            # Tokenize with NLTK
+            tokens = word_tokenize(text, language='spanish')
+            
+            # POS tagging to identify meaningful words
+            pos_tags = pos_tag(tokens)
+            
+            # Keep only meaningful parts of speech and filter stopwords
+            processed_tokens = []
+            for token, pos in pos_tags:
+                # Keep nouns, adjectives, verbs, and proper nouns
+                if (pos.startswith(('NN', 'JJ', 'VB', 'NNP')) and 
+                    token.isalpha() and 
+                    len(token) > 2 and
+                    token.lower() not in self.spanish_stopwords):
+                    
+                    # Apply stemming for better matching
+                    if self.stemmer:
+                        stemmed = self.stemmer.stem(token.lower())
+                        processed_tokens.append(stemmed)
+                    else:
+                        processed_tokens.append(token.lower())
+            
+            # Join tokens back into text
+            processed_text = ' '.join(processed_tokens)
+            
+            # If processing resulted in empty text, return original lowercased
+            return processed_text if processed_text.strip() else text.lower()
+            
+        except Exception as e:
+            logger.error(f"Error preprocessing text with NLTK: {e}")
+            # Fallback to simple preprocessing
+            try:
+                tokens = word_tokenize(text, language='spanish')
+                filtered_tokens = [
+                    token.lower() for token in tokens 
+                    if token.isalpha() and 
+                    len(token) > 2 and 
+                    token.lower() not in self.spanish_stopwords
+                ]
+                return ' '.join(filtered_tokens) if filtered_tokens else text.lower()
+            except:
+                return text.lower()
+
+    def extract_query_keywords(self, text: str, max_keywords: int = 5) -> List[str]:
+        """Extract relevant keywords using NLTK POS tagging and NER."""
+        if not text:
+            return []
+        
+        try:
+            # Tokenize and POS tag
+            tokens = word_tokenize(text, language='spanish')
+            pos_tags = pos_tag(tokens)
+            
+            # Extract nouns, adjectives, and proper nouns
+            keywords = []
+            for word, pos in pos_tags:
+                if (pos.startswith('NN') or pos.startswith('JJ') or pos.startswith('NNP')) and \
+                   len(word) > 3 and word.lower() not in self.spanish_stopwords:
+                    
+                    # Check if word is tourism-related or significant
+                    is_tourism_related = any(
+                        word.lower() in category_words 
+                        for category_words in self.tourism_keywords.values()
+                    )
+                    
+                    if is_tourism_related or len(word) > 5:
+                        keywords.append(word.lower())
+            
+            # Remove duplicates and limit
+            unique_keywords = list(dict.fromkeys(keywords))
+            return unique_keywords[:max_keywords]
+            
+        except Exception as e:
+            logger.error(f"Error extracting keywords with NLTK: {e}")
+            # Fallback to simple method
+            words = text.split()
+            return [w.lower() for w in words if len(w) > 4 and w.lower() not in self.spanish_stopwords][:max_keywords]
+
+    def analyze_query_sentiment(self, text: str) -> Dict[str, float]:
+        """Analyze sentiment using NLTK's VADER sentiment analyzer."""
+        if not text:
+            return {'sentiment': 'neutral', 'confidence': 0.0}
+        
+        try:
+            if self.sentiment_analyzer:
+                # Use VADER sentiment analyzer
+                scores = self.sentiment_analyzer.polarity_scores(text)
+                
+                # Determine sentiment based on compound score
+                compound = scores['compound']
+                
+                if compound >= 0.05:
+                    sentiment = 'positive'
+                    confidence = min(abs(compound), 0.9)
+                elif compound <= -0.05:
+                    sentiment = 'negative'
+                    confidence = min(abs(compound), 0.9)
+                else:
+                    sentiment = 'neutral'
+                    confidence = 0.1
+                
+                return {
+                    'sentiment': sentiment, 
+                    'confidence': confidence,
+                    'scores': scores  # Include detailed scores
+                }
+            else:
+                # Fallback to simple keyword-based analysis
+                positive_words = {
+                    'me gusta', 'me encanta', 'hermoso', 'bonito', 'increíble', 
+                    'maravilloso', 'espectacular', 'fantástico', 'excelente',
+                    'interesante', 'fascinante', 'impresionante'
+                }
+                
+                negative_words = {
+                    'no me gusta', 'aburrido', 'malo', 'terrible', 'horrible',
+                    'evitar', 'odio', 'detesto', 'feo', 'desagradable'
+                }
+                
+                text_lower = text.lower()
+                
+                positive_count = sum(1 for word in positive_words if word in text_lower)
+                negative_count = sum(1 for word in negative_words if word in text_lower)
+                
+                if positive_count > negative_count:
+                    sentiment = 'positive'
+                    confidence = min(positive_count / (positive_count + negative_count + 1), 0.8)
+                elif negative_count > positive_count:
+                    sentiment = 'negative'
+                    confidence = min(negative_count / (positive_count + negative_count + 1), 0.8)
+                else:
+                    sentiment = 'neutral'
+                    confidence = 0.1
+                
+                return {'sentiment': sentiment, 'confidence': confidence}
+            
+        except Exception as e:
+            logger.error(f"Error analyzing sentiment: {e}")
+            return {'sentiment': 'neutral', 'confidence': 0.0}

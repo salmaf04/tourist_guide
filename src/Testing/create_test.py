@@ -1,4 +1,4 @@
-import agent_generator.client as CL
+import agent_generator.mistral_client as CL
 import google.generativeai as genai
 from dotenv import load_dotenv
 import os
@@ -60,7 +60,7 @@ TRANSPORT_MODES = [
 class TestCreator:
     def __init__(self):
         os.environ['GEMINI_API_KEY'] = 'AIzaSyAlTAfeGz0amVAat8fyt3ZEtLBIQ9OFO5o'
-        self.gemini_model=CL.GeminiClient(1.7)
+        self.mistral_model=CL.MistralClient(0.7)
     
 
 
@@ -138,7 +138,7 @@ class TestCreator:
 
         try:
             # Enviar prompt a Gemini (ajustar según SDK)
-            response_text = self.gemini_model.generate(prompt)
+            response_text = self.mistral_model.generate(prompt)
 
             # Extraer JSON de la respuesta (manejo de posibles artefactos)
             json_match = re.search(r'\{[\s\S]*\}', response_text)
@@ -255,7 +255,7 @@ class TestCreator:
 
         try:
             # Enviar a Gemini
-            response_text = self.gemini_model.generate(prompt)
+            response_text = self.mistral_model.generate(prompt)
 
             # Extraer JSON
             json_match = re.search(r'\{[\s\S]*\}', response_text)

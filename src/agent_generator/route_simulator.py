@@ -134,7 +134,7 @@ class RouteSimulator:
     def simulate_route(self, route: List[int], node_params: List[Dict], 
                       simulation_steps: int = 5) -> Dict:
         """
-        Simula una ruta específica y devuelve métricas de satisfacción.
+        Simula una ruta específica y devuelve métricas de satisfacción mejoradas.
         
         :param route: Lista de índices de nodos que representan la ruta
         :param node_params: Parámetros de los nodos del optimizador
@@ -147,7 +147,8 @@ class RouteSimulator:
                 'num_places_visited': 0,
                 'significant_memories': [],
                 'total_interactions': 0,
-                'route': route
+                'route': route,
+                'route_quality_factors': {}
             }
         
         # Convertir ruta a nodos para simulación
@@ -159,16 +160,30 @@ class RouteSimulator:
                 'num_places_visited': 0,
                 'significant_memories': [],
                 'total_interactions': 0,
-                'route': route
+                'route': route,
+                'route_quality_factors': {}
             }
         
         try:
+            # Analizar calidad de la ruta antes de la simulación
+            route_quality_factors = self._analyze_route_quality(route, node_params, nodos_simulacion)
+            
             # Crear modelo de simulación
             modelo = ModeloTurismo(nodos_simulacion, nombre_turista=self.tourist_name)
             
-            # Ejecutar simulación
+            # Aplicar factores de ruta al turista inicial
+            self._apply_route_factors_to_tourist(modelo.turista, route_quality_factors)
+            
+            # Ejecutar simulación mejorada
             for step in range(simulation_steps):
+                # Simular fatiga progresiva
+                self._simulate_progressive_fatigue(modelo.turista, step, simulation_steps)
+                
+                # Ejecutar paso del modelo
                 modelo.step()
+                
+                # Aplicar efectos específicos de la secuencia de lugares
+                self._apply_sequence_effects(modelo.turista, nodos_simulacion, step)
             
             # Obtener métricas finales
             satisfaction_score = modelo.turista.satisfaccion
@@ -180,13 +195,19 @@ class RouteSimulator:
                 if hasattr(agente, 'interacciones'):
                     total_interactions += len(agente.interacciones)
             
+            # Aplicar bonificaciones/penalizaciones finales basadas en la calidad de la ruta
+            final_satisfaction = self._apply_final_route_adjustments(
+                satisfaction_score, route_quality_factors, len(nodos_simulacion)
+            )
+            
             return {
-                'satisfaction_score': satisfaction_score,
+                'satisfaction_score': final_satisfaction,
                 'num_places_visited': len(nodos_simulacion),
                 'significant_memories': significant_memories,
                 'total_interactions': total_interactions,
                 'route': route,
-                'simulation_success': True
+                'simulation_success': True,
+                'route_quality_factors': route_quality_factors
             }
             
         except Exception as e:
@@ -198,7 +219,8 @@ class RouteSimulator:
                 'total_interactions': 0,
                 'route': route,
                 'simulation_success': False,
-                'error': str(e)
+                'error': str(e),
+                'route_quality_factors': {}
             }
     
     def simulate_multiple_routes(self, routes: List[List[int]], node_params: List[Dict],
@@ -258,6 +280,189 @@ class RouteSimulator:
                   f"Interacciones: {result['total_interactions']}")
         
         return best_routes
+
+    def _analyze_route_quality(self, route: List[int], node_params: List[Dict], nodos_simulacion: List) -> Dict:
+        """
+        Analiza la calidad de una ruta considerando múltiples factores.
+        """
+        factors = {
+            'diversity_score': 0.0,
+            'flow_score': 0.0,
+            'balance_score': 0.0,
+            'efficiency_score': 0.0,
+            'experience_richness': 0.0
+        }
+        
+        if len(nodos_simulacion) <= 1:
+            return factors
+        
+        # 1. Diversidad de tipos de lugares
+        place_types = [nodo.tipo for nodo in nodos_simulacion]
+        unique_types = len(set(place_types))
+        factors['diversity_score'] = min(unique_types / 4.0, 1.0)  # Normalizado a 1.0
+        
+        # 2. Flujo de la experiencia (secuencia lógica)
+        flow_score = 0.0
+        type_transitions = {
+            ('museo', 'restaurante'): 0.8,
+            ('parque', 'mirador'): 0.9,
+            ('monumento', 'museo'): 0.7,
+            ('restaurante', 'parque'): 0.8,
+            ('tienda', 'restaurante'): 0.6,
+            ('iglesia', 'monumento'): 0.8,
+            ('mercado', 'restaurante'): 0.9,
+            ('playa', 'restaurante'): 0.7,
+            ('mirador', 'restaurante'): 0.8
+        }
+        
+        for i in range(len(place_types) - 1):
+            transition = (place_types[i], place_types[i + 1])
+            flow_score += type_transitions.get(transition, 0.5)
+        
+        factors['flow_score'] = flow_score / max(len(place_types) - 1, 1)
+        
+        # 3. Balance de actividades (no demasiado intenso o relajado)
+        intensity_map = {
+            'museo': 0.7, 'monumento': 0.6, 'parque': 0.3, 'restaurante': 0.4,
+            'iglesia': 0.5, 'mercado': 0.8, 'tienda': 0.6, 'playa': 0.2,
+            'mirador': 0.4, 'atraccion': 0.6
+        }
+        
+        intensities = [intensity_map.get(tipo, 0.5) for tipo in place_types]
+        avg_intensity = sum(intensities) / len(intensities)
+        # Penalizar extremos (muy intenso o muy relajado)
+        factors['balance_score'] = 1.0 - abs(avg_intensity - 0.5) * 2
+        
+        # 4. Eficiencia (relación lugares visitados vs tiempo total estimado)
+        total_time = sum(node_params[route[i]].get('time', 120) for i in range(1, len(route)) if route[i] < len(node_params))
+        if total_time > 0:
+            factors['efficiency_score'] = min(len(nodos_simulacion) * 60 / total_time, 1.0)
+        
+        # 5. Riqueza de experiencia (basada en descripciones y tipos)
+        experience_points = 0
+        for nodo in nodos_simulacion:
+            if len(nodo.descripcion) > 50:
+                experience_points += 0.3
+            if nodo.tipo in ['museo', 'monumento', 'mirador']:
+                experience_points += 0.4
+            if nodo.tipo in ['mercado', 'playa']:
+                experience_points += 0.3
+        
+        factors['experience_richness'] = min(experience_points / len(nodos_simulacion), 1.0)
+        
+        return factors
+
+    def _apply_route_factors_to_tourist(self, turista, route_factors: Dict):
+        """
+        Aplica factores de calidad de ruta al estado inicial del turista.
+        """
+        # Ajustar satisfacción inicial basada en la calidad percibida de la ruta
+        quality_bonus = (
+            route_factors['diversity_score'] * 0.5 +
+            route_factors['flow_score'] * 0.3 +
+            route_factors['experience_richness'] * 0.4
+        )
+        
+        # Aplicar bonificación/penalización inicial
+        initial_adjustment = (quality_bonus - 0.6) * 2  # Centrado en 0.6, rango ±0.8
+        turista.satisfaccion = max(0, min(10, turista.satisfaccion + initial_adjustment))
+        
+        print(f"DEBUG - Ajuste inicial por calidad de ruta: {initial_adjustment:.2f}, "
+              f"satisfacción inicial: {turista.satisfaccion:.2f}")
+
+    def _simulate_progressive_fatigue(self, turista, step: int, total_steps: int):
+        """
+        Simula fatiga progresiva durante la ruta.
+        """
+        # La fatiga aumenta progresivamente, pero puede ser mitigada por experiencias positivas
+        fatigue_factor = step / total_steps
+        base_fatigue = fatigue_factor * 0.3  # Máximo 0.3 puntos de fatiga
+        
+        # Reducir fatiga si la satisfacción es alta
+        if turista.satisfaccion > 7:
+            base_fatigue *= 0.5
+        elif turista.satisfaccion < 4:
+            base_fatigue *= 1.5
+        
+        # Aplicar fatiga como pequeña reducción de satisfacción
+        turista.satisfaccion = max(0, turista.satisfaccion - base_fatigue)
+
+    def _apply_sequence_effects(self, turista, nodos_simulacion: List, step: int):
+        """
+        Aplica efectos específicos basados en la secuencia de lugares visitados.
+        """
+        if step >= len(nodos_simulacion):
+            return
+        
+        current_place = nodos_simulacion[step % len(nodos_simulacion)]
+        
+        # Efectos de secuencia
+        sequence_effects = {
+            'restaurante': {
+                'after_museum': 0.8,  # Comer después de museo es bueno
+                'after_park': 0.6,    # Después de parque es normal
+                'consecutive': -0.4   # Dos restaurantes seguidos es malo
+            },
+            'museo': {
+                'after_restaurant': 0.5,  # Después de comer, menos energía para museo
+                'consecutive': -0.6       # Dos museos seguidos es cansado
+            },
+            'parque': {
+                'after_museum': 0.7,     # Relajarse después de museo
+                'after_restaurant': 0.4  # Después de comer, caminar es bueno
+            }
+        }
+        
+        if step > 0:
+            prev_place = nodos_simulacion[(step - 1) % len(nodos_simulacion)]
+            current_type = current_place.tipo
+            prev_type = prev_place.tipo
+            
+            effects = sequence_effects.get(current_type, {})
+            
+            if prev_type == current_type and 'consecutive' in effects:
+                adjustment = effects['consecutive']
+                turista.satisfaccion = max(0, min(10, turista.satisfaccion + adjustment))
+                print(f"DEBUG - Penalización por lugares consecutivos del mismo tipo: {adjustment:.2f}")
+            
+            elif f'after_{prev_type}' in effects:
+                adjustment = effects[f'after_{prev_type}']
+                turista.satisfaccion = max(0, min(10, turista.satisfaccion + adjustment))
+                print(f"DEBUG - Efecto de secuencia {prev_type}->{current_type}: {adjustment:.2f}")
+
+    def _apply_final_route_adjustments(self, satisfaction: float, route_factors: Dict, num_places: int) -> float:
+        """
+        Aplica ajustes finales basados en la calidad general de la ruta.
+        """
+        # Calcular puntuación de calidad general
+        overall_quality = (
+            route_factors.get('diversity_score', 0) * 0.25 +
+            route_factors.get('flow_score', 0) * 0.20 +
+            route_factors.get('balance_score', 0) * 0.20 +
+            route_factors.get('efficiency_score', 0) * 0.15 +
+            route_factors.get('experience_richness', 0) * 0.20
+        )
+        
+        # Bonificación por calidad de ruta
+        quality_bonus = (overall_quality - 0.5) * 2  # Rango ±1.0
+        
+        # Bonificación por número óptimo de lugares (3-5 lugares es ideal)
+        places_bonus = 0
+        if 3 <= num_places <= 5:
+            places_bonus = 0.5
+        elif num_places == 2 or num_places == 6:
+            places_bonus = 0.2
+        elif num_places == 1 or num_places >= 7:
+            places_bonus = -0.3
+        
+        # Aplicar ajustes
+        final_satisfaction = satisfaction + quality_bonus + places_bonus
+        final_satisfaction = max(0, min(10, final_satisfaction))
+        
+        print(f"DEBUG - Ajustes finales: calidad={quality_bonus:.2f}, lugares={places_bonus:.2f}, "
+              f"satisfacción final={final_satisfaction:.2f}")
+        
+        return final_satisfaction
 
 
 def simulate_and_rank_routes(routes: List[List[int]], node_params: List[Dict],

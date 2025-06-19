@@ -4,3 +4,4 @@ db
 clear_database_auto.py
 populate_static_data.py
 __pycache__
+src/RAG/__pycache__/rag.cpython-312.pyc

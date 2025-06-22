@@ -6,8 +6,8 @@ from typing import Dict, List, Tuple, Any, Optional, Set
 from sentence_transformers import SentenceTransformer
 from geopy.distance import geodesic
 from geopy.geocoders import Nominatim
-from sklearn.metrics.pairwise import cosine_similarity
 from collections import Counter, defaultdict
+from sklearn.metrics.pairwise import cosine_similarity
 import logging
 import os
 from dotenv import load_dotenv
@@ -20,8 +20,11 @@ from nltk.sentiment import SentimentIntensityAnalyzer
 from nltk.corpus import wordnet
 from nltk.tag import pos_tag
 from nltk.chunk import ne_chunk
-from agent_generator.mistral_client import MistralClient
 
+from pysentimiento import create_analyzer
+from keybert import KeyBERT
+
+from agent_generator.mistral_client import MistralClient 
 
 # Load environment variables from .env file
 load_dotenv()
@@ -36,6 +39,8 @@ class RAGPlanner:
         Initialize the RAG Planner with NLP capabilities
         """
         self.model = SentenceTransformer(model_name)
+        self.keybert_model = KeyBERT()
+        self.sentiment_analyzer = create_analyzer(task="sentiment", lang="es")
         
         # Set default ChromaDB path if none provided
         if chroma_db_path is None:
@@ -80,13 +85,7 @@ class RAGPlanner:
             # Initialize NLTK stemmer for Spanish
             self.stemmer = SnowballStemmer('spanish')
             
-            # Initialize VADER sentiment analyzer
-            try:
-                self.sentiment_analyzer = SentimentIntensityAnalyzer()
-                logger.info("VADER sentiment analyzer initialized")
-            except Exception as e:
-                logger.warning(f"Could not initialize VADER: {e}")
-                self.sentiment_analyzer = None
+            # pysentimiento analyzer is already initialized in the constructor.
             
             # Tourism-related keywords for enhanced processing
             self.tourism_keywords = {
@@ -363,48 +362,174 @@ class RAGPlanner:
         # Si llegamos aquí, todos los intentos fallaron
         logger.error("All OpenRouteService API attempts failed")
         raise RuntimeError(f"Failed to call OpenRouteService API after {max_retries} attempts. Last error: {last_error}")
+    def _extract_aspects(self, text: str, n_aspects: int = 3) -> List[Tuple[str, float]]:
+        """Extrae los aspectos clave de un texto con sus puntuaciones"""
+        try:
+            aspects = self.keybert_model.extract_keywords(
+                text,
+                keyphrase_ngram_range=(1, 2),
+                top_n=n_aspects,
+                stop_words=list(self.spanish_stopwords))
+            return aspects
+        except Exception as e:
+            logger.error(f"Error extracting aspects: {e}")
+            return []
+
+    def _analyze_aspect_sentiment(self, aspect: str, context: str) -> Dict[str, float]:
+        """Analiza el sentimiento hacia un aspecto específico en un contexto"""
+        try:
+            analysis = self.sentiment_analyzer.predict(f"{aspect} : {context}")
+            return {
+                'sentiment': analysis.output,
+                'probas': analysis.probas,
+                'score': analysis.probas["POS"] - analysis.probas["NEG"]
+            }
+        except Exception as e:
+            logger.error(f"Error in aspect sentiment analysis: {e}")
+            return {'sentiment': 'NEU', 'probas': {'POS':0, 'NEG':0, 'NEU':1}, 'score': 0}
+
+    def _calculate_enhanced_similarity(self, user_prefs: Dict, place: Dict) -> float:
+        """
+        Calcula una puntuación mejorada que combina:
+        - Similitud semántica de aspectos clave
+        - Alineamiento de sentimiento
+        """
+        # Extraer aspectos del lugar
+        place_aspects = self._extract_aspects(place['description'])
+        if not place_aspects:
+            return 0.0
+        
+        # Extraer aspectos de las preferencias del usuario
+        user_text = f"{user_prefs.get('user_notes', '')} {' '.join(f'{k}{v}' for k,v in user_prefs.get('category_interest',{}).items())}"
+        user_aspects = self._extract_aspects(user_text)
+        
+        # Calcular similitud semántica entre aspectos
+        semantic_sim = self._aspect_similarity(user_aspects, place_aspects)
+        
+        # Calcular alineamiento de sentimiento
+        sentiment_alignment = self._sentiment_alignment(user_prefs, place, place_aspects)
+        
+        # Combinar con pesos (60% semántica, 40% sentimiento)
+        return 0.6 * semantic_sim + 0.4 * sentiment_alignment
+
+    def _aspect_similarity(self, user_aspects: List[Tuple[str, float]], 
+                          place_aspects: List[Tuple[str, float]]) -> float:
+        """Calcula la similitud semántica entre aspectos"""
+        if not user_aspects or not place_aspects:
+            return 0.0
+        
+        # Extraer solo los términos de los aspectos
+        user_terms = [aspect[0] for aspect in user_aspects]
+        place_terms = [aspect[0] for aspect in place_aspects]
+        
+        # Generar embeddings
+        user_embs = self.model.encode(user_terms)
+        place_embs = self.model.encode(place_terms)
+        
+        # Matriz de similitud
+        sim_matrix = np.dot(user_embs, place_embs.T)
+        
+        # Promedio de máximas similitudes (soft alignment)
+        max_sim_user = np.max(sim_matrix, axis=1).mean()
+        max_sim_place = np.max(sim_matrix, axis=0).mean()
+        
+        return (max_sim_user + max_sim_place) / 2
+
+    def _sentiment_alignment(self, user_prefs: Dict, place: Dict, 
+                            place_aspects: List[Tuple[str, float]]) -> float:
+        """Calcula el alineamiento de sentimiento entre usuario y lugar"""
+        # Analizar sentimiento del usuario
+        user_sentiment = self.analyze_query_sentiment(user_prefs.get('user_notes', ''))
+        user_score = user_sentiment['scores']['pos'] - user_sentiment['scores']['neg']
+        
+        # Analizar sentimiento del lugar (promedio ponderado por aspectos)
+        place_sentiments = []
+        for aspect, weight in place_aspects:
+            aspect_sentiment = self._analyze_aspect_sentiment(aspect, place['description'])
+            place_sentiments.append(aspect_sentiment['score'] * weight)
+        
+        if not place_sentiments:
+            return 0.0
+            
+        place_score = np.mean(place_sentiments)
+        
+        # Calcular alineamiento (1 - distancia)
+        return 1 - abs(user_score - place_score)
 
     def _generate_place_embeddings(self, places: List[Dict]) -> List[np.ndarray]:
-        """Generate embeddings for places."""
-        embeddings = []
+        """Genera embeddings enriquecidos con información de aspectos y sentimiento"""
+        enriched_embeddings = []
         for place in places:
+            # Extraer aspectos clave
+            aspects = self._extract_aspects(place['description'])
+            aspects_text = " ".join([aspect[0] for aspect in aspects]) if aspects else ""
+            
+            # Texto enriquecido para el embedding
             text_representation = f"""
-Name: {place.get('name', '')}
-Type: {place.get('type', '')}
-Description: {place.get('description', '')}
-Category: {place.get('category', '')}
-Best Time to Visit: {place.get('bestTimeToVisit', '')}
-Location: {place.get('location', {}).get('city', '')} {place.get('location', {}).get('country', '')}
+Nombre: {place['name']}
+Aspectos clave: {aspects_text}
+Descripción: {place.get('description', '')}
+Categoría: {place.get('category', '')}
             """.strip()
-            embedding = self.model.encode(text_representation)
-            embeddings.append(embedding)
-        return embeddings
-
+            
+            # Generar embedding semántico
+            semantic_embedding = self.model.encode(text_representation)
+            
+            # Analizar sentimiento de la descripción del lugar
+            sentiment_scores = self.analyze_query_sentiment(place.get('description', '')).get('scores', {'pos': 0, 'neg': 0, 'neu': 1, 'compound': 0})
+            
+            # Crear vector de sentimiento
+            sentiment_vector = np.array([
+                sentiment_scores.get('pos', 0),
+                sentiment_scores.get('neg', 0),
+                sentiment_scores.get('neu', 1),
+                sentiment_scores.get('compound', 0)
+            ])
+            
+            # Combinar embedding semántico y de sentimiento
+            combined_embedding = np.concatenate([semantic_embedding, sentiment_vector])
+            enriched_embeddings.append(combined_embedding)
+            
+        return enriched_embeddings
+        
     def _generate_user_embedding(self, user_preferences: Dict) -> np.ndarray:
-        """Generate embedding for user preferences."""
+        """Generate embedding with sentiment enhancement for user query"""
         preferences_text = []
+        
+        # Procesar preferencias de categoría con sentimiento explícito
         if 'category_interest' in user_preferences:
             for category, score in user_preferences['category_interest'].items():
                 if score == 5:
-                    preferences_text.append(f"Absolutely loves {category}")
+                    preferences_text.append(f"Me encanta completamente {category}")
                 elif score == 4:
-                    preferences_text.append(f"Really enjoys {category}")
+                    preferences_text.append(f"Realmente me gusta {category}")
                 elif score == 3:
-                    preferences_text.append(f"Moderately interested in {category}")
+                    preferences_text.append(f"Tengo interés moderado en {category}")
                 elif score == 2:
-                    preferences_text.append(f"Limited interest in {category}")
+                    preferences_text.append(f"No me interesa mucho {category}")
                 elif score == 1:
-                    preferences_text.append(f"Dislikes {category}")
-        if 'transport_modes' in user_preferences:
-            preferences_text.append(f"Prefers: {', '.join(user_preferences['transport_modes'])}")
+                    preferences_text.append(f"Odio o evito {category}")
+        
+        # Procesar notas del usuario con análisis de sentimiento
+        sentiment_scores = {'pos': 0, 'neg': 0, 'neu': 1, 'compound': 0}
         if 'user_notes' in user_preferences and user_preferences['user_notes']:
-            preferences_text.append(f"Notes: {user_preferences['user_notes']}")
-        if 'city' in user_preferences:
-            preferences_text.append(f"Visiting {user_preferences['city']}")
-        if 'available_hours' in user_preferences:
-            preferences_text.append(f"Has {user_preferences['available_hours']} hours")
+            notes = user_preferences['user_notes']
+            preferences_text.append(notes)
+            sentiment_scores = self.analyze_query_sentiment(notes).get('scores', sentiment_scores)
+        
+        # Generar embedding semántico
         full_text = ". ".join(preferences_text)
-        return self.model.encode(full_text)
+        semantic_embedding = self.model.encode(full_text)
+        
+        # Añadir componentes de sentimiento (4 dimensiones)
+        sentiment_vector = np.array([
+            sentiment_scores['pos'],
+            sentiment_scores['neg'],
+            sentiment_scores['neu'],
+            sentiment_scores['compound']
+        ])
+        
+        return np.concatenate([semantic_embedding, sentiment_vector])
 
     def _filter_places_by_distance(self, places: List[Dict], max_distance_km: float, user_lat: float, user_lon: float) -> Tuple[List[Dict], List[int]]:
         """Filter places by maximum distance."""
@@ -455,47 +580,6 @@ Location: {place.get('location', {}).get('city', '')} {place.get('location', {})
                 
         return False
 
-    def _remove_duplicate_places(self, places: List[Dict]) -> List[Dict]:
-        """Remove duplicate places based on name similarity and location."""
-        if not places:
-            return places
-            
-        unique_places = []
-        seen_names = set()
-        
-        for place in places:
-            place_name = place.get('name', '').strip()
-            place_name_lower = place_name.lower()
-            
-            # Normalizar el nombre (quitar artículos, espacios extra, etc.)
-            normalized_name = re.sub(r'\b(el|la|los|las|de|del|de la)\b', '', place_name_lower)
-            normalized_name = re.sub(r'\s+', ' ', normalized_name).strip()
-            
-            # Verificar si ya hemos visto este nombre o uno muy similar
-            is_duplicate = False
-            for seen_name in seen_names:
-                # Calcular similitud simple
-                if normalized_name == seen_name or normalized_name in seen_name or seen_name in normalized_name:
-                    is_duplicate = True
-                    break
-                    
-                # Verificar si los nombres son muy similares (diferencia de 1-2 caracteres)
-                if len(normalized_name) > 5 and len(seen_name) > 5:
-                    # Calcular distancia de Levenshtein simple
-                    if abs(len(normalized_name) - len(seen_name)) <= 2:
-                        common_chars = sum(1 for a, b in zip(normalized_name, seen_name) if a == b)
-                        similarity = common_chars / max(len(normalized_name), len(seen_name))
-                        if similarity > 0.8:
-                            is_duplicate = True
-                            break
-            
-            if not is_duplicate:
-                seen_names.add(normalized_name)
-                unique_places.append(place)
-                
-        logger.info(f"Removed {len(places) - len(unique_places)} duplicate places")
-        return unique_places
-
     def _filter_places_by_city(self, places: List[Dict], target_city: str) -> List[Dict]:
         """Filter places by city and remove city/region names and duplicates."""
         # Primero filtrar por ciudad
@@ -509,12 +593,7 @@ Location: {place.get('location', {}).get('city', '')} {place.get('location', {})
                 filtered_places.append(place)
             else:
                 logger.info(f"Filtered out city/region name: {place_name}")
-        
-        # Remover duplicados
-        unique_places = self._remove_duplicate_places(filtered_places)
-        
-        logger.info(f"City filtering: {len(places)} -> {len(city_places)} -> {len(filtered_places)} -> {len(unique_places)} places")
-        return unique_places
+        return filtered_places
 
     def _semantic_search_chroma(self, query: str, n_results: int = 50) -> List[Dict]:
         """Perform semantic search in ChromaDB with deduplication."""
@@ -560,12 +639,8 @@ Location: {place.get('location', {}).get('city', '')} {place.get('location', {})
                     "coordinates": self._safe_eval_coordinates(metadata.get("coordinates", "None"))
                 }
                 places_data.append(place)
-
-            # Aplicar filtrado de duplicados también aquí
-            unique_places = self._remove_duplicate_places(places_data)
-            logger.info(f"Semantic search: {len(places_data)} -> {len(unique_places)} unique places")
             
-            return unique_places
+            return places_data
         except Exception as e:
             logger.error(f"Error performing semantic search: {e}")
             return []
@@ -610,30 +685,64 @@ Location: {place.get('location', {}).get('city', '')} {place.get('location', {})
         return ". ".join(query_parts)
 
     def _calculate_cosine_similarity(self, user_embedding: np.ndarray, place_embeddings: List[np.ndarray]) -> List[float]:
-        """Calculate cosine similarity between user and place embeddings."""
-        user_embedding_2d = user_embedding.reshape(1, -1)
+        """Enhanced cosine similarity with sentiment adjustment"""
         similarities = []
-        for place_embedding in place_embeddings:
-            place_embedding_2d = place_embedding.reshape(1, -1)
-            similarity = cosine_similarity(user_embedding_2d, place_embedding_2d)[0][0]
-            similarities.append(similarity)
+        
+        # Separar componentes del embedding del usuario
+        user_semantic = user_embedding[:-4]  # Primeras 384 dimensiones (MiniLM)
+        user_sentiment = user_embedding[-4:]  # Últimas 4 dimensiones (sentimiento)
+        
+        for place_emb in place_embeddings:
+            # Separar componentes del embedding del lugar
+            place_semantic = place_emb[:-4]
+            place_sentiment = place_emb[-4:]
+            
+            # 1. Calcular similitud semántica tradicional
+            semantic_sim = cosine_similarity(
+                user_semantic.reshape(1, -1),
+                place_semantic.reshape(1, -1)
+            )[0][0]
+            
+            # 2. Calcular alineamiento de sentimiento
+            user_pos, user_neg = user_sentiment[0], user_sentiment[1]
+            place_pos, place_neg = place_sentiment[0], place_sentiment[1]
+
+            # Premiar la coincidencia de sentimientos (positivo con positivo, negativo con negativo)
+            sentiment_similarity = (user_pos * place_pos) + (user_neg * place_neg)
+            
+            # Penalizar la discrepancia de sentimientos (positivo con negativo)
+            sentiment_opposition = (user_pos * place_neg) + (user_neg * place_pos)
+            
+            # El alineamiento va de -1 (totalmente opuesto) a 1 (totalmente alineado)
+            alignment = sentiment_similarity - sentiment_opposition
+            
+            # Normalizar a rango [0, 1]
+            sentiment_alignment = (alignment + 1) / 2
+            
+            # 3. Combinar multiplicando la similitud semántica por el alineamiento de sentimiento
+            # Esto actúa como una "puerta": si el sentimiento no está alineado, la similitud baja drásticamente
+            combined_sim = semantic_sim * sentiment_alignment
+            similarities.append(combined_sim)
+        
         return similarities
+
 
     def _filter_places_by_similarity(self, places: List[Dict], place_embeddings: List[np.ndarray],
                                    user_embedding: np.ndarray, similarity_threshold: float = 0.1) -> Tuple[List[Dict], List[np.ndarray], List[float]]:
-        """Filter places by cosine similarity."""
+        """Filter places by enhanced cosine similarity"""
         similarities = self._calculate_cosine_similarity(user_embedding, place_embeddings)
-        filtered_places = []
-        filtered_embeddings = []
-        filtered_similarities = []
-
-        for place, embedding, similarity in zip(places, place_embeddings, similarities):
-            if similarity >= similarity_threshold:
-                filtered_places.append(place)
-                filtered_embeddings.append(embedding)
-                filtered_similarities.append(similarity)
-
-        return filtered_places, filtered_embeddings, filtered_similarities
+        
+        # Ordenar por similitud descendente
+        sorted_data = sorted(zip(places, place_embeddings, similarities), 
+                           key=lambda x: x[2], reverse=True)
+        
+        # Filtrar por umbral y desempaquetar
+        filtered_data = [(p, e, s) for p, e, s in sorted_data if s >= similarity_threshold]
+        
+        if filtered_data:
+            filtered_places, filtered_embeddings, filtered_similarities = zip(*filtered_data)
+            return list(filtered_places), list(filtered_embeddings), list(filtered_similarities)
+        return [], [], []
 
     def _call_mistral_llm(self, prompt: str, system: Optional[str] = None) -> str:
         """Call Mistral API for LLM response using the Mistral client."""
@@ -653,14 +762,12 @@ Location: {place.get('location', {}).get('city', '')} {place.get('location', {})
             raise RuntimeError(f"Failed to call Mistral LLM: {e}")
 
     def _get_llm_recommendation_prompt(self, places: List[Dict], user_preferences: Dict) -> str:
-        """Generate a prompt for the LLM to estimate time and classify categories."""
+        """Generate a prompt for the LLM to estimate time only (categories come from database)."""
         if not places:
             return "No places found matching the criteria."
 
         prompt = f"""
-Based on the following tourist preferences and available places, perform two tasks:
-1. Estimate how much time (in hours) the tourist would be interested in spending at each location.
-2. Classify each place into one of the following categories: engineering, history, food, culture, beach, shopping, nature, or general.
+Based on the following tourist preferences and available places, estimate how much time (in hours) the tourist would be interested in spending at each location.
 
 TOURIST PROFILE:
 - Visiting: {user_preferences.get('city', 'Unknown city')}
@@ -688,9 +795,7 @@ CATEGORY INTERESTS (1-5 scale):
 """
 
         prompt += """
-TASK: For each place listed above, provide:
-1. Estimated time (in hours) the tourist would be interested in spending there based on their preferences.
-2. Category classification (choose one: engineering, history, food, culture, beach, shopping, nature, or general).
+TASK: For each place listed above, provide only the estimated time (in hours) the tourist would be interested in spending there based on their preferences.
 
 Consider:
 - The tourist's category interests and ratings
@@ -699,34 +804,27 @@ Consider:
 - The suggested visit duration for each place
 
 Provide your response in the following format:
-Place 1: X.X hours - Brief reasoning | Category: <category> - Brief reasoning
-Place 2: X.X hours - Brief reasoning | Category: <category> - Brief reasoning
+Place 1: X.X hours - Brief reasoning
+Place 2: X.X hours - Brief reasoning
 ...
 
-Be realistic with time estimates and precise with category classification.
+Be realistic with time estimates based on the tourist's interests and the nature of each place.
 """
         return prompt
 
-    def _parse_llm_time_estimates(self, llm_response: str, places: List[Dict]) -> Tuple[List[float], List[str]]:
-        """Parse LLM response to extract time estimates and categories."""
+    def _parse_llm_time_estimates(self, llm_response: str, places: List[Dict]) -> List[float]:
+        """Parse LLM response to extract time estimates only (categories come from database)."""
         time_estimates = []
-        categories = []
         lines = llm_response.split('\n')
 
         for i, place in enumerate(places):
             found_time = None
-            found_category = "general"
 
             for line in lines:
                 if f"Place {i+1}:" in line or f"{i+1}." in line or place['name'] in line:
                     time_match = re.search(r'(\d+\.?\d*)\s*(?:hours?|h)', line, re.IGNORECASE)
                     if time_match:
                         found_time = float(time_match.group(1))
-                    category_match = re.search(r'Category:\s*(\w+)', line, re.IGNORECASE)
-                    if category_match:
-                        found_category = category_match.group(1).lower()
-                        if found_category not in ["engineering", "history", "food", "culture", "beach", "shopping", "nature"]:
-                            found_category = "general"
                     break
 
             if found_time is None:
@@ -735,9 +833,8 @@ Be realistic with time estimates and precise with category classification.
                 found_time = float(duration_match.group(1)) if duration_match else 2.0
 
             time_estimates.append(found_time)
-            categories.append(found_category)
 
-        return time_estimates, categories
+        return time_estimates
 
     def process_user_request(self, user_preferences: Dict, user_lat: float, user_lon: float, transport_mode: str) -> Dict[str, Any]:
         """Main RAG processing function."""
@@ -803,40 +900,50 @@ Be realistic with time estimates and precise with category classification.
             logger.info(f"📍 Places within 50km: {len(extended_places)}")
             
             raise RuntimeError(f"No places found within {max_distance_km}km.")
+        
+        enhanced_scores = []
+        for place in distance_filtered_places:
+            score = self._calculate_enhanced_similarity(user_preferences, place)
+            enhanced_scores.append(score)
+        
+        # Ordenar lugares por puntuación mejorada
+        sorted_places = sorted(zip(distance_filtered_places, enhanced_scores), 
+                             key=lambda x: x[1], reverse=True)
+        
+        filtered_places = [place for place, score in sorted_places if score > 0.1]
+        filtered_scores = [score for place, score in sorted_places if score > 0.1]
 
-        # Generar embeddings para todos los lugares encontrados
+        # Generate embeddings for all distance-filtered places
         distance_place_embeddings = self._generate_place_embeddings(distance_filtered_places)
         user_embedding = self._generate_user_embedding(user_preferences)
         
-        # Calcular similitudes para todos los lugares
+        # Calculate similarities for all places
         all_similarities = self._calculate_cosine_similarity(user_embedding, distance_place_embeddings)
         
-        # En lugar de filtrar por similitud, usar todos los lugares encontrados
-        # pero ordenarlos por similitud para dar prioridad a los más relevantes
+        # Use all places but order them by similarity to prioritize the most relevant ones
         places_with_similarity = list(zip(distance_filtered_places, distance_place_embeddings, all_similarities))
-        places_with_similarity.sort(key=lambda x: x[2], reverse=True)  # Ordenar por similitud descendente
+        places_with_similarity.sort(key=lambda x: x[2], reverse=True)  # Sort by similarity descending
         
-        # Separar los datos ordenados
-        filtered_places = [item[0] for item in places_with_similarity]
+        # Separate the sorted data
         place_embeddings = [item[1] for item in places_with_similarity]
         similarity_scores = [item[2] for item in places_with_similarity]
         
-        logger.info(f"Using all {len(filtered_places)} places found (sorted by relevance)")
+        logger.info(f"Using all {len(filtered_places)} places found (sorted by cosine similarity)")
 
         # Calcular matriz de tiempos para todos los lugares
         time_matrix = self._calculate_time_matrix_ors(filtered_places, user_lat, user_lon, transport_mode)
 
-        # Procesar con LLM todos los lugares encontrados
+        # Procesar con LLM todos los lugares encontrados (solo para estimaciones de tiempo)
         llm_prompt = self._get_llm_recommendation_prompt(filtered_places, user_preferences)
         llm_response = self._call_mistral_llm(llm_prompt)
-        llm_time_estimates, llm_categories = self._parse_llm_time_estimates(llm_response, filtered_places)
+        llm_time_estimates = self._parse_llm_time_estimates(llm_response, filtered_places)
 
-        # Actualizar categorías
-        for place, category in zip(filtered_places, llm_categories):
-            place['category'] = category
+       # Extraer categorías de la base de datos (no del LLM)
+        db_categories = [place.get('category', 'general') for place in filtered_places]
 
         return {
             'filtered_places': filtered_places,
+            'enhanced_scores': filtered_scores,
             'time_matrix': time_matrix,
             'place_embeddings': place_embeddings,
             'user_embedding': user_embedding,
@@ -845,8 +952,8 @@ Be realistic with time estimates and precise with category classification.
             'similarity_scores': similarity_scores,
             'user_preferences': user_preferences,
             'transport_mode': transport_mode,
-            'data_source': "ChromaDB semantic search (all unique places)",
-            'llm_categories': llm_categories
+            'db_categories': db_categories ,
+            'data_source': "ChromaDB semantic search with cosine similarity ranking"
         }
 
     def preprocess_text(self, text: str) -> str:
@@ -933,64 +1040,48 @@ Be realistic with time estimates and precise with category classification.
             words = text.split()
             return [w.lower() for w in words if len(w) > 4 and w.lower() not in self.spanish_stopwords][:max_keywords]
 
-    def analyze_query_sentiment(self, text: str) -> Dict[str, float]:
-        """Analyze sentiment using NLTK's VADER sentiment analyzer."""
-        if not text:
-            return {'sentiment': 'neutral', 'confidence': 0.0}
-        
+    def analyze_query_sentiment(self, text: str) -> Dict[str, Any]:
+        """
+        Analyze sentiment using pysentimiento for Spanish.
+        """
+        if not text or not isinstance(text, str) or not text.strip():
+            return {
+                'sentiment': 'neutral', 
+                'confidence': 1.0, 
+                'scores': {'pos': 0.0, 'neg': 0.0, 'neu': 1.0, 'compound': 0.0}
+            }
+
         try:
-            if self.sentiment_analyzer:
-                # Use VADER sentiment analyzer
-                scores = self.sentiment_analyzer.polarity_scores(text)
-                
-                # Determine sentiment based on compound score
-                compound = scores['compound']
-                
-                if compound >= 0.05:
-                    sentiment = 'positive'
-                    confidence = min(abs(compound), 0.9)
-                elif compound <= -0.05:
-                    sentiment = 'negative'
-                    confidence = min(abs(compound), 0.9)
-                else:
-                    sentiment = 'neutral'
-                    confidence = 0.1
-                
-                return {
-                    'sentiment': sentiment, 
-                    'confidence': confidence,
-                    'scores': scores  # Include detailed scores
-                }
-            else:
-                # Fallback to simple keyword-based analysis
-                positive_words = {
-                    'me gusta', 'me encanta', 'hermoso', 'bonito', 'increíble', 
-                    'maravilloso', 'espectacular', 'fantástico', 'excelente',
-                    'interesante', 'fascinante', 'impresionante'
-                }
-                
-                negative_words = {
-                    'no me gusta', 'aburrido', 'malo', 'terrible', 'horrible',
-                    'evitar', 'odio', 'detesto', 'feo', 'desagradable'
-                }
-                
-                text_lower = text.lower()
-                
-                positive_count = sum(1 for word in positive_words if word in text_lower)
-                negative_count = sum(1 for word in negative_words if word in text_lower)
-                
-                if positive_count > negative_count:
-                    sentiment = 'positive'
-                    confidence = min(positive_count / (positive_count + negative_count + 1), 0.8)
-                elif negative_count > positive_count:
-                    sentiment = 'negative'
-                    confidence = min(negative_count / (positive_count + negative_count + 1), 0.8)
-                else:
-                    sentiment = 'neutral'
-                    confidence = 0.1
-                
-                return {'sentiment': sentiment, 'confidence': confidence}
+            # Use pysentimiento analyzer
+            analysis = self.sentiment_analyzer.predict(text)
+            
+            # Map sentiment to a standard format
+            sentiment_map = {'POS': 'positive', 'NEG': 'negative', 'NEU': 'neutral'}
+            sentiment = sentiment_map.get(analysis.output, 'neutral')
+            
+            # Get probabilities
+            probas = analysis.probas
+            confidence = probas.get(analysis.output, 0.0)
+            
+            # Create a VADER-like score structure for consistency
+            scores = {
+                'pos': probas.get('POS', 0.0),
+                'neg': probas.get('NEG', 0.0),
+                'neu': probas.get('NEU', 0.0),
+                # Compound score: weighted difference between positive and negative
+                'compound': probas.get('POS', 0.0) - probas.get('NEG', 0.0)
+            }
+            
+            return {
+                'sentiment': sentiment,
+                'confidence': confidence,
+                'scores': scores
+            }
             
         except Exception as e:
-            logger.error(f"Error analyzing sentiment: {e}")
-            return {'sentiment': 'neutral', 'confidence': 0.0}
+            logger.error(f"Error analyzing sentiment with pysentimiento: {e}")
+            return {
+                'sentiment': 'neutral', 
+                'confidence': 1.0, 
+                'scores': {'pos': 0.0, 'neg': 0.0, 'neu': 1.0, 'compound': 0.0}
+            }

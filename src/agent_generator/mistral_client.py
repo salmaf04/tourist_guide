@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from mistralai import Mistral
 from utils.gemini_api_counter import count_gemini_calls
 
+
 # Load environment variables
 load_dotenv()
 

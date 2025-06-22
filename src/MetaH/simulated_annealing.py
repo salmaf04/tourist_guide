@@ -1,6 +1,7 @@
 import random
 import math
 import numpy
+import RAG.rag
 
 class RouteFinder:
     def __init__(self, distance_matrix, node_params):
@@ -14,6 +15,7 @@ class RouteFinder:
         :param tourist_param: Valor del parámetro del turista.
         :type tourist_param: float
         """
+        self.ra=RAG.rag.RAGPlanner()
         self.distance_matrix = distance_matrix
         self.node_params = node_params
         self.num_nodes = len(distance_matrix)
@@ -24,27 +26,25 @@ class RouteFinder:
         self.ganma = 80
     
 
-    def find_route(self, tourist_param, time, sort):
+    def find_route(self, tourist_param, time, randomize=False):
         """
         Encuentra una ruta que maximice la función goal_func(route) y cumpla con la restricción de tiempo.
 
         :param time: Tiempo máximo en horas.
         :type time: float
-        :param starting_node: Nodo de partida.
-        :type starting_node: int
+        :param tourist_param: Embedding del Turista
+        :type tourist_param: ndarray
         :return: La ruta óptima encontrada.
         :rtype: list[int]
         """
 
         
         C=[0]
-        route = []
+        route = [0]
 
         for i in range (1,self.num_nodes):
             route.append(i)
             C.append(self.node_goal_func(i,tourist_param))
-        #Haz que el starting_node sea el primero
-        route.insert(0, 0)
 
         # Inicializa la temperatura
         temperature = self.beta
@@ -110,7 +110,8 @@ class RouteFinder:
 
     #Similitud coseno entre ambos embeddings
     def node_goal_func(self,node_id,tourist_param):
-        return numpy.dot(self.node_params[node_id]['vector'], tourist_param)/(numpy.linalg.norm(self.node_params[node_id]['vector'])* numpy.linalg.norm(tourist_param))
+        self.ra._calculate_cosine_similarity(tourist_param,[self.node_params[node_id]['vector']])[0]
+        return 
 
     def goal_func(self, route, time, tourist_param):
         """

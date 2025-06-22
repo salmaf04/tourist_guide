@@ -60,8 +60,8 @@ TRANSPORT_MODES = [
 class TestCreator:
     def __init__(self):
         os.environ['GEMINI_API_KEY'] = 'AIzaSyAlTAfeGz0amVAat8fyt3ZEtLBIQ9OFO5o'
-        self.mistral_model=CL.MistralClient(0.7)
-    
+        self.mistral_model_FC=CL.MistralClient(0.7)
+        self.mistral_model_FE=CL.MistralClient(0.1)
 
 
     def get_user_preferences_from_llm(self):
@@ -138,7 +138,7 @@ class TestCreator:
 
         try:
             # Enviar prompt a Gemini (ajustar según SDK)
-            response_text = self.mistral_model.generate(prompt)
+            response_text = self.mistral_model_FC.generate(prompt)
 
             # Extraer JSON de la respuesta (manejo de posibles artefactos)
             json_match = re.search(r'\{[\s\S]*\}', response_text)
@@ -188,7 +188,6 @@ class TestCreator:
                 'user_notes': ""
             }
             
-
     def generate_preferences_from_route(self, route, user_preferences:dict, meta_data):
         """
         Genera preferencias de usuario (category_interest y user_notes) basadas en una ruta turística
@@ -255,7 +254,7 @@ class TestCreator:
 
         try:
             # Enviar a Gemini
-            response_text = self.mistral_model.generate(prompt)
+            response_text = self.mistral_model_FE.generate(prompt)
 
             # Extraer JSON
             json_match = re.search(r'\{[\s\S]*\}', response_text)
@@ -292,7 +291,7 @@ class TestCreator:
         score=-1
         for route in routes:
             emb2=ra._generate_user_embedding(self.generate_preferences_from_route(route,user_preferences,meta_data))
-            score=max(ra._calculate_cosine_similarity(emb1,emb2),score)
+            score=max(ra._calculate_cosine_similarity(emb1,[emb2])[0],score)
         
         return score
     
@@ -347,21 +346,21 @@ class TestCreator:
             })
         # Ordenar por función objetivo (mayor es mejor) y tomar las 10 mejores
         route_evaluations.sort(key=lambda x: x['goal_value'], reverse=True)
-        top_10_routes = [eval_data['route'] for eval_data in route_evaluations[:10]]
+        top_10_routes = [eval_data['route'] for eval_data in route_evaluations[:2]]
         
         # Simular solo las 10 mejores rutas para obtener las mejores por satisfacción
         from agent_generator.route_simulator import simulate_and_rank_routes
         optimized_routes_with_details = simulate_and_rank_routes(
             routes=top_10_routes,
             node_params=meta_data['node_params'],
-            top_n=3,
-            simulation_steps=3,
+            top_n=2,
+            simulation_steps=4,
             tourist_name="Turista_Simulado"
         )
         optimized_routes = [result['route'] for result in optimized_routes_with_details]
 
         print(f"Prefenecias del turista: {user_preferences}\n")
-        print(f"Metaheuristica score: {self.evaluate(top_10_routes[:3], user_preferences)}\n")
-        print(f"Rutas de la Metaheuristica: {top_10_routes[:3]}\n\n")
-        print(f"Metaheuristica + Simulación score: {self.evaluate(optimized_routes , user_preferences)}")
+        print(f"Metaheuristica score: {self.evaluate(top_10_routes[:3], user_preferences,meta_data)}\n")
+        print(f"Rutas de la Metaheuristica: {top_10_routes[:1]}\n\n")
+        print(f"Metaheuristica + Simulación score: {self.evaluate(optimized_routes , user_preferences,meta_data)}")
         print(f"Rutas de la Metaheuristica + Simulación: {optimized_routes}\n\n")

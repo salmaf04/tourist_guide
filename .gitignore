@@ -6,4 +6,5 @@ populate_static_data.py
 __pycache__
 src/RAG/__pycache__/rag.cpython-312.pyc
 src/__pycache__/app.cpython-312.pyc
-src/RAG/__pycache__/rag.cpython-312.pyc
+debug.log
+

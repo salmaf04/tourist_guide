@@ -645,55 +645,75 @@ def app():
                     transport_mode = selected_transport[0] if selected_transport else "A pie"
                     
                     rag_data = rag_planner.process_user_request(user_preferences, lat, lon, transport_mode)
-                    
+                    # Mostrar información de aspectos si está disponible
+                    if hasattr(rag_planner, 'keybert_model'):
+                        st.session_state['aspect_analyzer'] = rag_planner.keybert_model
+                
                 except Exception as e:
-                    st.error(f"❌ Error en el procesamiento RAG: {str(e)}")
+                    st.error(f"❌ Error en el procesamiento mejorado: {str(e)}")
                     return
-            
-            # Mostrar resultados del RAG
-            user_query = user_notes if user_notes else city  # O ajusta según tu lógica de consulta
+        
+            # Visualización mejorada de resultados
             if rag_data['filtered_places']:
-                # Validación modularizada y triggering del crawler
-                rag_data, reason, triggered_crawler = ensure_fresh_rag_data(
-                    rag_data, user_query, fetch_tourism_data, city, RAGPlanner, user_preferences, lat, lon, transport_mode
-                )
-                if triggered_crawler:
-                    if reason == "Datos completos y actualizados":
-                        st.success('✅ Datos actualizados correctamente.')
-                    else:
-                        st.warning(f'⚠️ Aún con limitaciones después de actualizar: {reason}')
-                elif reason != "Datos completos y actualizados":
-                    st.warning(f'⚠️ La información tiene limitaciones: {reason}. Mostrando resultados actuales.')
-                st.success(f"✅ ¡Encontrados {len(rag_data['filtered_places'])} lugares que coinciden con tus preferencias!")
+                st.success(f"✅ ¡Encontrados {len(rag_data['filtered_places'])} lugares relevantes!")
                 
-                # Información del RAG
-                with st.expander("📊 Información del Análisis IA"):
-                    st.write(f"**Fuente de datos:** {rag_data.get('data_source', 'ChromaDB')}")
-                    st.write(f"**Lugares analizados:** {len(rag_data['filtered_places'])}")
-                    st.write(f"**Matriz de tiempos:** {rag_data['time_matrix'].shape}")
-                    
-                    if rag_data.get('llm_response'):
-                        st.write("**Análisis del LLM:**")
-                        st.text_area("Análisis LLM", rag_data['llm_response'][:500] + "...", height=100, label_visibility="collapsed")
+                # Mostrar análisis de aspectos para el primer lugar como ejemplo
+                if 'aspect_analyzer' in st.session_state and rag_data['filtered_places']:
+                    sample_place = rag_data['filtered_places'][0]
+                    with st.expander("🔍 Análisis de Aspectos Clave (Ejemplo)", expanded=False):
+                        st.write(f"**Lugar:** {sample_place['name']}")
+                        
+                        # Extraer aspectos
+                        aspects = st.session_state['aspect_analyzer'].extract_keywords(
+                            sample_place.get('description', ''),
+                            keyphrase_ngram_range=(1, 2),
+                            top_n=5,
+                            stop_words=list(rag_planner.spanish_stopwords)
+                        )
+                        
+                        if aspects:
+                            st.write("**Aspectos clave identificados:**")
+                            for aspect, score in aspects:
+                                # Analizar sentimiento para cada aspecto
+                                sentiment = rag_planner.sentiment_analyzer.predict(f"{aspect} : {sample_place['description']}")
+                                
+                                # Mostrar con colores según sentimiento
+                                if sentiment.output == "POS":
+                                    st.success(f"- ✅ {aspect} (Relevancia: {score:.2f}, Sentimiento: Positivo)")
+                                elif sentiment.output == "NEG":
+                                    st.error(f"- ❌ {aspect} (Relevancia: {score:.2f}, Sentimiento: Negativo)")
+                                else:
+                                    st.info(f"- ⏹️ {aspect} (Relevancia: {score:.2f}, Sentimiento: Neutral)")
+                        else:
+                            st.warning("No se pudieron extraer aspectos clave de este lugar.")
                 
-                # Mostrar lugares recomendados
-                st.markdown("### 📍 Lugares Recomendados")
+                # Mostrar lugares recomendados con información de sentimiento
+                st.markdown("### 📍 Lugares Recomendados con Análisis de Sentimiento")
                 
-                for i, place in enumerate(rag_data['filtered_places']):
+                for i, place in enumerate(rag_data['filtered_places'][:5]):  # Mostrar solo los 5 primeros para no saturar
                     time_estimate = rag_data['llm_time_estimates'][i] if i < len(rag_data['llm_time_estimates']) else 2.0
                     similarity = rag_data['similarity_scores'][i] if i < len(rag_data['similarity_scores']) else 0.0
                     
-                    with st.expander(f"📍 {place['name']} ({time_estimate}h recomendadas - Afinidad: {similarity:.2f})"):
-                        col1, col2 = st.columns([2, 1])
+                    # Analizar sentimiento general de la descripción
+                    desc_sentiment = rag_planner.sentiment_analyzer.predict(place.get('description', ''))
+                    
+                    with st.expander(f"{'✅' if desc_sentiment.output == 'POS' else '⚠️' if desc_sentiment.output == 'NEU' else '❌'} {place['name']} - {desc_sentiment.output}"):
+                        col1, col2 = st.columns([3, 1])
                         
                         with col1:
-                            st.write(f"**Categoría:** {place.get('touristClassification', 'No especificada')}")
+                            st.write(f"**Categoría:** {place.get('category', 'general')}")
                             st.write(f"**Descripción:** {place.get('description', 'No disponible')}")
-                            st.write(f"**Atractivo:** {place.get('visitorAppeal', 'No disponible')}")
+                            
+                            # Mostrar confianza en el análisis de sentimiento
+                            st.write("**Análisis de Sentimiento:**")
+                            st.progress(desc_sentiment.probas[desc_sentiment.output], 
+                                    text=f"{desc_sentiment.output} ({desc_sentiment.probas[desc_sentiment.output]*100:.1f}% confianza)")
                         
                         with col2:
                             st.metric("Tiempo recomendado", f"{time_estimate}h")
                             st.metric("Afinidad", f"{similarity:.2f}")
+                            st.metric("Sentimiento", 
+                                    f"{desc_sentiment.probas['POS']*100:.0f}% 👍 / {desc_sentiment.probas['NEG']*100:.0f}% 👎")
                 
                 # OPTIMIZACIÓN DE RUTAS CON METAHEURÍSTICA
                 display_route_optimization_results(rag_data, user_preferences)

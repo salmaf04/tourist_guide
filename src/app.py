@@ -10,9 +10,9 @@ from scrapy.crawler import CrawlerProcess
 from crawler.tourist_spider import TouristSpider
 from scrapy.utils.project import get_project_settings
 import datetime
-from sklearn.metrics.pairwise import cosine_similarity
 from utils.validation import is_incomplete_or_outdated, ensure_fresh_rag_data
 from utils.gemini_api_counter import api_counter
+from utils.get_start_coordinates import get_city_coordinates
 import atexit
 
 # Función para imprimir estadísticas al final de la ejecución
@@ -596,28 +596,17 @@ def app():
                     st.error("❌ No se pudo localizar la dirección. Usando centro de la ciudad.")
                     
         else:
-            # Usar coordenadas del centro de la ciudad
-            city_coords = {
-                'Madrid': (40.4168, -3.7038),
-                'Barcelona': (41.3851, 2.1734),
-                'Valencia': (39.4699, -0.3763),
-                'Sevilla': (37.3891, -5.9845),
-                'Bilbao': (43.2627, -2.9253),
-                'Granada': (37.1773, -3.5986),
-                'Toledo': (39.8628, -4.0273),
-                'Salamanca': (40.9701, -5.6635),
-                'Málaga': (36.7213, -4.4214),
-                'San Sebastián': (43.3183, -1.9812),
-                'Córdoba': (37.8882, -4.7794),
-                'Zaragoza': (41.6488, -0.8891),
-                'Santander': (43.4623, -3.8099),
-                'Cádiz': (36.5297, -6.2920),
-                'Murcia': (37.9922, -1.1307),
-                'Palma de Mallorca': (39.5696, 2.6502),
-                'Ibiza': (38.9067, 1.4206)
-            }
-            lat, lon = city_coords.get(city, (40.4168, -3.7038))  # Default to Madrid
-            st.info(f"📍 Usando centro de {city} como punto de partida")
+            # Obtener coordenadas dinámicamente de la base de datos o geocodificación
+            with st.spinner(f"📍 Obteniendo coordenadas del centro de {city}..."):
+                city_coordinates = get_city_coordinates(city, user_agent="tourist_planner")
+                
+                if city_coordinates:
+                    lat, lon = city_coordinates
+                    st.info(f"📍 Usando centro de {city} como punto de partida: {lat:.5f}, {lon:.5f}")
+                else:
+                    # Fallback a Madrid si no se pueden obtener coordenadas
+                    lat, lon = (40.4168, -3.7038)
+                    st.warning(f"⚠️ No se pudieron obtener coordenadas para {city}. Usando Madrid como fallback.")
 
         # Procesamiento con RAG
         st.markdown("### 🤖 Procesando Recomendaciones con IA")

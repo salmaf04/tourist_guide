@@ -15,27 +15,73 @@ import time
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def get_cities_with_coordinates(db_path: str = "../crawler/db", 
-                              user_agent: str = "tourist_guide_app") -> Dict[str, Tuple[float, float]]:
+def _find_database_path() -> str:
+    """
+    Encuentra automáticamente la ruta correcta de la base de datos ChromaDB.
+    Prueba diferentes rutas posibles desde el directorio actual.
+    
+    Returns:
+        str: Ruta válida a la base de datos
+        
+    Raises:
+        RuntimeError: Si no se encuentra ninguna ruta válida
+    """
+    possible_paths = [
+        "src/crawler/db",           # Desde raíz del proyecto
+        "crawler/db",               # Desde src/
+        "../crawler/db",            # Desde src/utils/
+        "../../src/crawler/db",     # Desde subdirectorios
+        "./src/crawler/db",         # Variante con ./
+    ]
+    
+    for path in possible_paths:
+        if os.path.exists(path):
+            logger.info(f"Base de datos encontrada en: {path}")
+            return path
+    
+    # Si no se encuentra, intentar crear la ruta absoluta
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    # Subir dos niveles desde src/utils/ hasta la raíz del proyecto
+    project_root = os.path.dirname(os.path.dirname(current_dir))
+    absolute_db_path = os.path.join(project_root, "src", "crawler", "db")
+    
+    if os.path.exists(absolute_db_path):
+        logger.info(f"Base de datos encontrada en ruta absoluta: {absolute_db_path}")
+        return absolute_db_path
+    
+    # Listar rutas intentadas para debugging
+    logger.error("No se encontró la base de datos en ninguna de estas rutas:")
+    for path in possible_paths + [absolute_db_path]:
+        logger.error(f"  - {path} (existe: {os.path.exists(path)})")
+    
+    raise RuntimeError(f"No se pudo encontrar la base de datos ChromaDB en ninguna ubicación conocida")
+
+def get_cities_with_coordinates(db_path: str = None, 
+                              user_agent: str = "tourist_guide_app",
+                              specific_city: Optional[str] = None) -> Dict[str, Tuple[float, float]]:
     """
     Consulta la base de datos ChromaDB para extraer todas las ciudades únicas
     y devuelve un diccionario con las ciudades y sus coordenadas del centro.
     
     Args:
-        db_path (str): Ruta a la base de datos ChromaDB
+        db_path (str, optional): Ruta a la base de datos ChromaDB. Si es None, se detecta automáticamente.
         user_agent (str): User agent para el geocodificador
+        specific_city (Optional[str]): Si se proporciona, solo devuelve las coordenadas de esta ciudad específica
         
     Returns:
         Dict[str, Tuple[float, float]]: Diccionario con formato {ciudad: (latitud, longitud)}
+        Si specific_city se proporciona, devuelve un diccionario con solo esa ciudad
         
     Raises:
         RuntimeError: Si no se puede conectar a la base de datos
         Exception: Si hay errores en la geocodificación
     """
     
-    # Verificar que la ruta de la base de datos existe
-    if not os.path.exists(db_path):
-        raise RuntimeError(f"La ruta de la base de datos no existe: {db_path}")
+    # Si no se proporciona db_path o no existe, detectar automáticamente
+    if db_path is None or not os.path.exists(db_path):
+        if db_path is not None:
+            logger.warning(f"Ruta proporcionada no existe: {db_path}. Detectando automáticamente...")
+        db_path = _find_database_path()
     
     cities_coordinates = {}
     
@@ -63,8 +109,29 @@ def get_cities_with_coordinates(db_path: str = "../crawler/db",
             if city and city.strip():  # Verificar que la ciudad no esté vacía
                 unique_cities.add(city.strip())
         
-        logger.info(f"Ciudades únicas encontradas: {len(unique_cities)}")
-        logger.info(f"Lista de ciudades: {sorted(unique_cities)}")
+        # Si se especifica una ciudad específica, filtrar solo esa ciudad
+        if specific_city:
+            if specific_city in unique_cities:
+                unique_cities = {specific_city}
+                logger.info(f"Buscando coordenadas específicamente para: {specific_city}")
+            else:
+                logger.warning(f"Ciudad específica '{specific_city}' no encontrada en la base de datos")
+                # Intentar geocodificar directamente aunque no esté en la BD
+                try:
+                    geolocator = Nominatim(user_agent=user_agent)
+                    location = geolocator.geocode(specific_city, timeout=10)
+                    if location:
+                        coordinates = (location.latitude, location.longitude)
+                        cities_coordinates[specific_city] = coordinates
+                        logger.info(f"✅ {specific_city} (geocodificación directa): {coordinates}")
+                    else:
+                        logger.warning(f"⚠️ No se pudieron obtener coordenadas para: {specific_city}")
+                except Exception as e:
+                    logger.error(f"❌ Error geocodificando {specific_city}: {e}")
+                return cities_coordinates
+        else:
+            logger.info(f"Ciudades únicas encontradas: {len(unique_cities)}")
+            logger.info(f"Lista de ciudades: {sorted(unique_cities)}")
         
         # Inicializar geocodificador
         geolocator = Nominatim(user_agent=user_agent)
@@ -100,18 +167,28 @@ def get_cities_with_coordinates(db_path: str = "../crawler/db",
     return cities_coordinates
 
 
-def get_city_coordinates(city_name: str, user_agent: str = "tourist_guide_app") -> Optional[Tuple[float, float]]:
+def get_city_coordinates(city_name: str, user_agent: str = "tourist_guide_app", 
+                        db_path: str = None) -> Optional[Tuple[float, float]]:
     """
     Obtiene las coordenadas del centro de una ciudad específica.
+    Primero intenta usar la función optimizada con base de datos, luego geocodificación directa.
     
     Args:
         city_name (str): Nombre de la ciudad
         user_agent (str): User agent para el geocodificador
+        db_path (str, optional): Ruta a la base de datos ChromaDB. Si es None, se detecta automáticamente.
         
     Returns:
         Optional[Tuple[float, float]]: Tupla con (latitud, longitud) o None si no se encuentra
     """
     try:
+        # Primero intentar con la función optimizada que usa la base de datos
+        cities_coords = get_cities_with_coordinates(db_path, user_agent, specific_city=city_name)
+        if city_name in cities_coords:
+            return cities_coords[city_name]
+        
+        # Si no se encuentra, usar geocodificación directa como fallback
+        logger.info(f"Usando geocodificación directa para {city_name}")
         geolocator = Nominatim(user_agent=user_agent)
         location = geolocator.geocode(city_name, timeout=10)
         
@@ -126,19 +203,22 @@ def get_city_coordinates(city_name: str, user_agent: str = "tourist_guide_app") 
         return None
 
 
-def list_cities_in_database(db_path: str = "src/crawler/db") -> Dict[str, int]:
+def list_cities_in_database(db_path: str = None) -> Dict[str, int]:
     """
     Lista todas las ciudades en la base de datos con el número de lugares por ciudad.
     
     Args:
-        db_path (str): Ruta a la base de datos ChromaDB
+        db_path (str, optional): Ruta a la base de datos ChromaDB. Si es None, se detecta automáticamente.
         
     Returns:
         Dict[str, int]: Diccionario con formato {ciudad: número_de_lugares}
     """
     
-    if not os.path.exists(db_path):
-        raise RuntimeError(f"La ruta de la base de datos no existe: {db_path}")
+    # Si no se proporciona db_path o no existe, detectar automáticamente
+    if db_path is None or not os.path.exists(db_path):
+        if db_path is not None:
+            logger.warning(f"Ruta proporcionada no existe: {db_path}. Detectando automáticamente...")
+        db_path = _find_database_path()
     
     try:
         # Conectar a ChromaDB
@@ -161,12 +241,12 @@ def list_cities_in_database(db_path: str = "src/crawler/db") -> Dict[str, int]:
         raise RuntimeError(f"No se pudo acceder a la base de datos: {e}")
 
 
-def print_cities_summary(db_path: str = "src/crawler/db"):
+def print_cities_summary(db_path: str = None):
     """
     Imprime un resumen de las ciudades en la base de datos con sus coordenadas.
     
     Args:
-        db_path (str): Ruta a la base de datos ChromaDB
+        db_path (str, optional): Ruta a la base de datos ChromaDB. Si es None, se detecta automáticamente.
     """
     try:
         # Obtener ciudades con conteo

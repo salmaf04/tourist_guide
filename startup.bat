@@ -1,3 +1,3 @@
 @echo off
-python src/app.py
+streamlit run src/app.py 
 pause  

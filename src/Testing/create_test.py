@@ -8,7 +8,16 @@ import json
 from BestRoutes.meta_routes import RouteOptimizer
 import re
 import app as app
-import RAG.rag as rag
+from RAG.rag import RAGPlanner
+from datetime import datetime
+from typing import Dict, Tuple
+from pathlib import Path
+from utils import get_start_coordinates
+
+
+
+# Configuración
+TEST_FOLDER = "src/Testing/tests"
 
 """
 AVAILEABLE_CITIES = [
@@ -59,9 +68,9 @@ TRANSPORT_MODES = [
 
 class TestCreator:
     def __init__(self):
-        os.environ['GEMINI_API_KEY'] = 'AIzaSyAlTAfeGz0amVAat8fyt3ZEtLBIQ9OFO5o'
         self.mistral_model_FC=CL.MistralClient(0.7)
         self.mistral_model_FE=CL.MistralClient(0.1)
+        self.ra=RAGPlanner()
 
 
     def get_user_preferences_from_llm(self):
@@ -74,15 +83,17 @@ class TestCreator:
         Returns:
             dict: Diccionario con las preferencias del usuario
         """
-        # Definición de constantes
-        AVAILABLE_CITIES = [
-            'Madrid', 'Barcelona', 'Valencia', 'Sevilla', 'Bilbao', 'Granada', 'Toledo',
-            'Salamanca', 'Málaga', 'San Sebastián', 'Córdoba', 'Zaragoza', 'Santander',
-            'Cádiz', 'Murcia', 'Palma de Mallorca'
-        ]
+        available_cities=set()
+        for place in self.ra.places_data:
+                available_cities.add(place.get('location', {}).get('city', 'Unknown'))
+        
+        #AVAILABLE_CITIES=sorted(list(available_cities))
+        AVAILABLE_CITIES=['Barcelona','Salamanca']
 
-        TRANSPORT_MODES = ["Caminar", "Bicicleta", "Bus", "Coche/taxi", "Otro"]
+        TRANSPORT_MODES = app.TRANSPORT_MODES
 
+        CATEGORIES=app.CATEGORIES
+        random.seed(41)
         # Construir el prompt
         prompt = f"""
         Actúa como un turista real planeando un viaje. Responde ÚNICAMENTE con un objeto JSON válido.
@@ -106,13 +117,7 @@ class TestCreator:
             "max_distance": número,
             "transport_modes": ["lista", "de", "transportes"],
             "category_interest": {{
-                "engineering": número,
-                "history": número,
-                "food": número,
-                "culture": número,
-                "beach": número,
-                "shopping": número,
-                "nature": número
+{',\n'.join([f'                "{cat[0]}": número' for cat in CATEGORIES])}
             }},
             "user_notes": "Tus notas aquí"
         }}
@@ -124,13 +129,7 @@ class TestCreator:
             "max_distance": 15,
             "transport_modes": ["Caminar", "Bus"],
             "category_interest": {{
-                "engineering": 4,
-                "history": 5,
-                "food": 5,
-                "culture": 4,
-                "beach": 3,
-                "shopping": 2,
-                "nature": 3
+{',\n'.join([f'                "{cat[0]}": {random.randint(1, 5)}' for cat in CATEGORIES])}                
             }},
             "user_notes": "Me interesa la arquitectura modernista y probar tapas auténticas"
         }}
@@ -146,10 +145,10 @@ class TestCreator:
                 raise ValueError("No se encontró JSON en la respuesta")
 
             data = json.loads(json_match.group())
-
+            print(data['city'])
             # Validar y normalizar datos
             if data['city'] not in AVAILABLE_CITIES:
-                data['city'] = 'Madrid'  # Valor por defecto
+                data['city'] = 'Barcelona'  # Valor por defecto
 
             data['available_hours'] = max(1, min(16, int(data['available_hours'])))
             data['max_distance'] = max(1, min(50, int(data['max_distance'])))
@@ -161,7 +160,7 @@ class TestCreator:
             data['transport_modes'] = valid_transport
 
             # Normalizar categorías
-            for category in ['engineering', 'history', 'food', 'culture', 'beach', 'shopping', 'nature']:
+            for category in [cat[0] for cat in CATEGORIES]:
                 data['category_interest'][category] = max(1, min(5, int(data['category_interest'].get(category, 3))))
 
             # Construir diccionario final
@@ -182,7 +181,7 @@ class TestCreator:
             return {
                 'city': 'Error',
                 'available_hours': 8,
-                'category_interest': {c: 3 for c in ['engineering', 'history', 'food', 'culture', 'beach', 'shopping', 'nature']},
+                'category_interest': {c: 3 for c in [cat[0] for cat in CATEGORIES]},
                 'transport_modes': ['Caminar'],
                 'max_distance': 10,
                 'user_notes': ""
@@ -204,7 +203,8 @@ class TestCreator:
             f"POI {i+1}: {meta_data['node_params'][poi]['place_data']['name']}\n"
             f"Descripción: {meta_data['node_params'][poi]['place_data']['description']}"
             for i, poi in enumerate(route[1:-1]))
-
+       
+        CATEGORIES=app.CATEGORIES
         # Construir el prompt
         prompt = f"""
         Eres un turista que acaba de completar esta ruta turística:
@@ -225,13 +225,7 @@ class TestCreator:
         Estructura JSON requerida:
         {{
             "category_interest": {{
-                "engineering": <puntaje>,
-                "history": <puntaje>,
-                "food": <puntaje>,
-                "culture": <puntaje>,
-                "beach": <puntaje>,
-                "shopping": <puntaje>,
-                "nature": <puntaje>
+{',\n'.join([f'                "{cat[0]}": <puntaje>' for cat in CATEGORIES])}
             }},
             "user_notes": "<texto descriptivo>"
         }}
@@ -239,13 +233,7 @@ class TestCreator:
         Ejemplo de respuesta válida:
         {{
             "category_interest": {{
-                "history": 5,
-                "culture": 4,
-                "engineering": 3,
-                "food": 4,
-                "beach": 1,
-                "shopping": 2,
-                "nature": 3
+{',\n'.join([f'                "{cat[0]}": {random.randint(1, 5)}' for cat in CATEGORIES])} 
             }},
             "user_notes": "Me fascina la historia y la cultura local, con especial interés en la gastronomía tradicional. Disfruto explorando sitios patrimoniales y probando platos auténticos."
         }}
@@ -264,8 +252,7 @@ class TestCreator:
             data = json.loads(json_match.group())
 
             # Validar y normalizar
-            valid_categories = ['engineering', 'history', 'food', 'culture', 'beach', 'shopping', 'nature']
-            for category in valid_categories:
+            for category in [cat[0] for cat in CATEGORIES]:
                 score = data['category_interest'].get(category, 3)
                 data['category_interest'][category] = max(1, min(5, int(score)))
 
@@ -281,49 +268,29 @@ class TestCreator:
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             print(f"Error generando preferencias: {str(e)}. Usando valores por defecto")
             return {
-                'category_interest': {c: 3 for c in ['engineering', 'history', 'food', 'culture', 'beach', 'shopping', 'nature']},
+                'category_interest': {c: 3 for c in [cat[0] for cat in CATEGORIES]},
                 'user_notes': "No tengo preferencias especiales."
             }
     
     def evaluate(self, routes, user_preferences, meta_data):
-        ra=rag.RAGPlanner()
-        emb1=ra.similarity_calculator.generate_user_embedding(user_preferences)
+        emb1=self.ra.similarity_calculator.generate_user_embedding(user_preferences)
         score=-1
         for route in routes:
-            emb2=ra.similarity_calculator.generate_user_embedding(self.generate_preferences_from_route(route,user_preferences,meta_data))
-            score=max(ra.calculate_cosine_similarity(emb1,[emb2])[0],score)
+            emb2=self.ra.similarity_calculator.generate_user_embedding(self.generate_preferences_from_route(route,user_preferences,meta_data))
+            score=max(self.ra.calculate_cosine_similarity(emb1,[emb2])[0],score)
         
         return score
     
-    def generate_test(self):
+    def generate_test(self, test_id:int):
         user_preferences = self.get_user_preferences_from_llm()
-        city_coords = {
-                'Madrid': (40.4168, -3.7038),
-                'Barcelona': (41.3851, 2.1734),
-                'Valencia': (39.4699, -0.3763),
-                'Sevilla': (37.3891, -5.9845),
-                'Bilbao': (43.2627, -2.9253),
-                'Granada': (37.1773, -3.5986),
-                'Toledo': (39.8628, -4.0273),
-                'Salamanca': (40.9701, -5.6635),
-                'Málaga': (36.7213, -4.4214),
-                'San Sebastián': (43.3183, -1.9812),
-                'Córdoba': (37.8882, -4.7794),
-                'Zaragoza': (41.6488, -0.8891),
-                'Santander': (43.4623, -3.8099),
-                'Cádiz': (36.5297, -6.2920),
-                'Murcia': (37.9922, -1.1307),
-                'Palma de Mallorca': (39.5696, 2.6502)
-            }
+        city_coords = get_start_coordinates.get_cities_with_coordinates()
         lat, lon = city_coords.get(user_preferences['city'], (40.4168, -3.7038))
         transport_mode = user_preferences['transport_modes'][0] if user_preferences['transport_modes'] else "Caminar"
         
         crawler_success = app.fetch_tourism_data(user_preferences['city'])
 
-        rag_planner = app.RAGPlanner()  # Usa la ruta por defecto que ya está configurada correctamente
-
-        rag_data = rag_planner.process_user_request(user_preferences, lat, lon, transport_mode)
-
+        rag_data = self.ra.process_user_request(user_preferences, lat, lon, transport_mode)
+        
         meta_data = app.prepare_metaheuristic_data(rag_data, user_preferences)
         
         route_optimizer = RouteOptimizer(
@@ -353,14 +320,33 @@ class TestCreator:
         optimized_routes_with_details = simulate_and_rank_routes(
             routes=top_10_routes,
             node_params=meta_data['node_params'],
-            top_n=2,
-            simulation_steps=4,
+            top_n=3,
+            simulation_steps=1,
             tourist_name="Turista_Simulado"
         )
         optimized_routes = [result['route'] for result in optimized_routes_with_details]
+        
+        Mscore=self.evaluate(top_10_routes[:3], user_preferences,meta_data)
+        Sscore=self.evaluate(optimized_routes , user_preferences,meta_data)
+        self.guardar_resultados(test_id,{'M':Mscore,'S':Sscore},user_preferences)
 
-        print(f"Prefenecias del turista: {user_preferences}\n")
-        print(f"Metaheuristica score: {self.evaluate(top_10_routes[:3], user_preferences,meta_data)}\n")
-        print(f"Rutas de la Metaheuristica: {top_10_routes[:1]}\n\n")
-        print(f"Metaheuristica + Simulación score: {self.evaluate(optimized_routes , user_preferences,meta_data)}")
-        print(f"Rutas de la Metaheuristica + Simulación: {optimized_routes}\n\n")
+
+    def guardar_resultados(self, test_id: int, resultados, input):
+        """Guarda los resultados en un archivo JSON único"""
+        datos={
+            "test_id": test_id,
+            "inputs": input,
+            "resultados": resultados,
+        }
+        carpeta_destino= Path(TEST_FOLDER)
+
+
+        filename = carpeta_destino / f"test_{datos['test_id']}.json"
+
+        print(filename.absolute())
+
+        with open(filename.absolute(), 'w', encoding='utf-8') as f:
+            json.dump(datos, f, indent=4)
+
+        print(f"✅ Test {datos['test_id']} guardado en {filename}")
+        return filename

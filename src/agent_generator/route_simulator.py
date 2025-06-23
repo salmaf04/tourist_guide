@@ -111,12 +111,28 @@ class RouteSimulator:
     
     def _get_place_agents(self, node_param: Dict) -> List[str]:
         """
-        Determina qué tipos de agentes debe tener un lugar.
+        Determina qué tipos de agentes debe tener un lugar usando generación dinámica con LLM.
         """
         place_type = self._get_place_type(node_param)
+        place_name = node_param.get('place_name', 'lugar desconocido')
+        place_description = self._get_place_description(node_param)
         
-        # Mapear tipos de lugares a agentes apropiados
-        agent_mapping = {
+        # Usar el generador dinámico de agentes
+        try:
+            from agent_generator.dynamic_agent_generator import dynamic_agent_generator
+            return dynamic_agent_generator.generate_agents_for_place(
+                place_name, place_type, place_description
+            )
+        except Exception as e:
+            print(f"DEBUG - Error usando generador dinámico para {place_name}: {e}")
+            # Fallback directo
+            return self._get_fallback_agents(place_type)
+    
+    def _get_fallback_agents(self, place_type: str) -> List[str]:
+        """
+        Mapeo de fallback cuando falla la generación dinámica con LLM.
+        """
+        fallback_mapping = {
             'museo': ['guía', 'curador'],
             'restaurante': ['mesero', 'chef'],
             'parque': ['guía', 'jardinero'],
@@ -129,7 +145,7 @@ class RouteSimulator:
             'atraccion': ['guía', 'asistente']
         }
         
-        return agent_mapping.get(place_type, ['guía', 'asistente'])
+        return fallback_mapping.get(place_type, ['guía', 'asistente'])
     
     def simulate_route(self, route: List[int], node_params: List[Dict], 
                       simulation_steps: int = 5) -> Dict:

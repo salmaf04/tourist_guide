@@ -36,15 +36,17 @@ def print_api_statistics():
 # Registrar la función para ejecutar al final
 atexit.register(print_api_statistics)
 
-# Opciones de categorías según mock
+
 CATEGORIES = [
-    ("engineering", "Ingeniería"),
     ("history", "Historia"),
-    ("food", "Comida"),
+    ("religion", "Religión"),
     ("culture", "Cultura"),
-    ("beach", "Playas"),
-    ("shopping", "Compras"),
+    ("urban", "Urbano"),
     ("nature", "Naturaleza"),
+    ("beach", "Playas"),
+    ("food", "Comida"),
+    ("shopping", "Compras"),
+    ("entertainment", "Entretenimiento"),
 ]
 
 TRANSPORT_MODES = [

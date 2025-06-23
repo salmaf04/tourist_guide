@@ -376,17 +376,69 @@ class RAGPlanner:
             return []
 
     def _analyze_aspect_sentiment(self, aspect: str, context: str) -> Dict[str, float]:
-        """Analiza el sentimiento hacia un aspecto específico en un contexto"""
-        try:
-            analysis = self.sentiment_analyzer.predict(f"{aspect} : {context}")
-            return {
-                'sentiment': analysis.output,
-                'probas': analysis.probas,
-                'score': analysis.probas["POS"] - analysis.probas["NEG"]
-            }
-        except Exception as e:
-            logger.error(f"Error in aspect sentiment analysis: {e}")
-            return {'sentiment': 'NEU', 'probas': {'POS':0, 'NEG':0, 'NEU':1}, 'score': 0}
+        """Analiza el sentimiento hacia un aspecto específico en un contexto usando el método estándar"""
+        # Usar el método estándar que ya tiene validaciones y manejo de errores
+        combined_text = f"{aspect} : {context}"
+        sentiment_result = self.analyze_query_sentiment(combined_text)
+        
+        # Convertir al formato esperado por el método que lo llama
+        return {
+            'sentiment': sentiment_result['sentiment'].upper()[:3],  # POS, NEG, NEU
+            'probas': {
+                'POS': sentiment_result['scores']['pos'],
+                'NEG': sentiment_result['scores']['neg'],
+                'NEU': sentiment_result['scores']['neu']
+            },
+            'score': sentiment_result['scores']['compound']
+        }
+
+    def _calculate_category_penalty(self, user_prefs: Dict, place: Dict) -> float:
+        """
+        Calcula una penalización basada en las categorías que el usuario no le gustan
+        """
+        if 'category_interest' not in user_prefs:
+            return 1.0
+        
+        place_category = place.get('category', '').lower()
+        if not place_category:
+            return 1.0
+        
+        # Mapear categorías de lugares a categorías de preferencias
+        category_mapping = {
+            'history': ['history', 'sitio histórico', 'histórico', 'museo', 'catedral', 'iglesia', 'castillo'],
+            'religion': ['religion', 'religioso', 'catedral', 'iglesia', 'basílica', 'monasterio', 'convento'],
+            'culture': ['culture', 'cultural', 'museo', 'catedral', 'iglesia', 'arte', 'teatro'],
+            'urban': ['urban', 'urbano', 'ciudad', 'plaza', 'calle', 'barrio', 'centro'],
+            'nature': ['nature', 'natural', 'sitio natural', 'parque', 'meadows', 'jardín', 'bosque'],
+            'beach': ['beach', 'playa', 'sea', 'beaches', 'costa', 'mar'],
+            'food': ['food', 'mercado', 'market', 'restaurante', 'gastronomía', 'comida'],
+            'shopping': ['shopping', 'mercado', 'market', 'tienda', 'comercio', 'compras'],
+            'entertainment': ['entertainment', 'entretenimiento', 'diversión', 'espectáculo', 'ocio']
+        }
+        
+        # Encontrar qué categoría de preferencia corresponde al lugar
+        place_pref_category = None
+        for pref_cat, keywords in category_mapping.items():
+            if any(keyword in place_category for keyword in keywords):
+                place_pref_category = pref_cat
+                break
+        
+        if place_pref_category and place_pref_category in user_prefs['category_interest']:
+            score = user_prefs['category_interest'][place_pref_category]
+            
+            # Convertir puntuación a multiplicador
+            if score == 5:
+                return 1.5  # Boost para categorías favoritas
+            elif score == 4:
+                return 1.2
+            elif score == 3:
+                return 1.0  # Neutral
+            elif score == 2:
+                return 0.5  # Penalización moderada
+            elif score == 1:
+                return 0.1  # Penalización fuerte
+        
+        return 1.0  # Sin penalización si no hay mapeo
 
     def _calculate_enhanced_similarity(self, user_prefs: Dict, place: Dict) -> float:
         """
@@ -399,8 +451,24 @@ class RAGPlanner:
         if not place_aspects:
             return 0.0
         
-        # Extraer aspectos de las preferencias del usuario
-        user_text = f"{user_prefs.get('user_notes', '')} {' '.join(f'{k}{v}' for k,v in user_prefs.get('category_interest',{}).items())}"
+        # Extraer aspectos de las preferencias del usuario con mayor énfasis en preferencias negativas
+        category_texts = []
+        if 'category_interest' in user_prefs:
+            for category, score in user_prefs.get('category_interest', {}).items():
+                if score == 5:
+                    category_texts.append(f"me encanta {category}")
+                    category_texts.append(f"busco {category}")
+                elif score == 4:
+                    category_texts.append(f"me gusta mucho {category}")
+                elif score == 3:
+                    category_texts.append(f"me interesa {category}")
+                elif score == 2:
+                    category_texts.append(f"no me interesa mucho {category}")
+                elif score == 1:
+                    category_texts.append(f"odio {category}")
+                    category_texts.append(f"evito {category}")
+        
+        user_text = f"{user_prefs.get('user_notes', '')} {' '.join(category_texts)}"
         user_aspects = self._extract_aspects(user_text)
         
         # Calcular similitud semántica entre aspectos
@@ -409,8 +477,14 @@ class RAGPlanner:
         # Calcular alineamiento de sentimiento
         sentiment_alignment = self._sentiment_alignment(user_prefs, place, place_aspects)
         
-        # Combinar con pesos (60% semántica, 40% sentimiento)
-        return 0.6 * semantic_sim + 0.4 * sentiment_alignment
+        # Calcular penalización por categoría
+        category_penalty = self._calculate_category_penalty(user_prefs, place)
+        
+        # Combinar con pesos y aplicar penalización
+        base_similarity = 0.6 * semantic_sim + 0.4 * sentiment_alignment
+        final_similarity = base_similarity * category_penalty
+        
+        return max(0.0, min(1.0, final_similarity))  # Asegurar rango [0, 1]
 
     def _aspect_similarity(self, user_aspects: List[Tuple[str, float]], 
                           place_aspects: List[Tuple[str, float]]) -> float:
@@ -475,16 +549,8 @@ Categoría: {place.get('category', '')}
             # Generar embedding semántico
             semantic_embedding = self.model.encode(text_representation)
             
-            # Analizar sentimiento de la descripción del lugar
-            sentiment_scores = self.analyze_query_sentiment(place.get('description', '')).get('scores', {'pos': 0, 'neg': 0, 'neu': 1, 'compound': 0})
-            
-            # Crear vector de sentimiento
-            sentiment_vector = np.array([
-                sentiment_scores.get('pos', 0),
-                sentiment_scores.get('neg', 0),
-                sentiment_scores.get('neu', 1),
-                sentiment_scores.get('compound', 0)
-            ])
+            # Usar el método optimizado para obtener directamente el vector de sentimiento
+            sentiment_vector = self._get_sentiment_vector(place.get('description', ''))
             
             # Combinar embedding semántico y de sentimiento
             combined_embedding = np.concatenate([semantic_embedding, sentiment_vector])
@@ -496,39 +562,66 @@ Categoría: {place.get('category', '')}
         """Generate embedding with sentiment enhancement for user query"""
         preferences_text = []
         
-        # Procesar preferencias de categoría con sentimiento explícito
+        # Procesar preferencias de categoría con sentimiento explícito y pesos
         if 'category_interest' in user_preferences:
             for category, score in user_preferences['category_interest'].items():
                 if score == 5:
                     preferences_text.append(f"Me encanta completamente {category}")
+                    # Repetir para dar más peso a las preferencias altas
+                    preferences_text.append(f"Busco especialmente {category}")
+                    preferences_text.append(f"Prefiero {category}")
                 elif score == 4:
                     preferences_text.append(f"Realmente me gusta {category}")
+                    preferences_text.append(f"Me interesa mucho {category}")
                 elif score == 3:
                     preferences_text.append(f"Tengo interés moderado en {category}")
                 elif score == 2:
                     preferences_text.append(f"No me interesa mucho {category}")
+                    preferences_text.append(f"Evito un poco {category}")
                 elif score == 1:
-                    preferences_text.append(f"Odio o evito {category}")
+                    preferences_text.append(f"Odio {category}")
+                    preferences_text.append(f"Evito completamente {category}")
+                    preferences_text.append(f"No quiero {category}")
         
         # Procesar notas del usuario con análisis de sentimiento
-        sentiment_scores = {'pos': 0, 'neg': 0, 'neu': 1, 'compound': 0}
+        user_notes_text = ""
         if 'user_notes' in user_preferences and user_preferences['user_notes']:
             notes = user_preferences['user_notes']
             preferences_text.append(notes)
-            sentiment_scores = self.analyze_query_sentiment(notes).get('scores', sentiment_scores)
+            # Dar más peso a las notas del usuario repitiéndolas
+            preferences_text.append(notes)
+            user_notes_text = notes
+        
+        # Si no hay texto de preferencias, crear uno más específico basado en las categorías
+        if not preferences_text:
+            # Crear texto específico basado en las puntuaciones de categorías
+            if 'category_interest' in user_preferences:
+                high_cats = [cat for cat, score in user_preferences['category_interest'].items() if score >= 4]
+                low_cats = [cat for cat, score in user_preferences['category_interest'].items() if score <= 2]
+                
+                if high_cats and low_cats:
+                    preferences_text.append(f"Busco específicamente {' y '.join(high_cats)}")
+                    preferences_text.append(f"Evito completamente {' y '.join(low_cats)}")
+                elif high_cats:
+                    preferences_text.append(f"Solo me interesan {' y '.join(high_cats)}")
+                elif low_cats:
+                    preferences_text.append(f"No quiero {' y '.join(low_cats)}")
+                else:
+                    preferences_text.append("Busco lugares turísticos interesantes")
+            else:
+                preferences_text.append("Busco lugares turísticos interesantes")
         
         # Generar embedding semántico
         full_text = ". ".join(preferences_text)
+        logger.info(f"🔍 User preference text for embedding: {full_text[:200]}...")
         semantic_embedding = self.model.encode(full_text)
         
-        # Añadir componentes de sentimiento (4 dimensiones)
-        sentiment_vector = np.array([
-            sentiment_scores['pos'],
-            sentiment_scores['neg'],
-            sentiment_scores['neu'],
-            sentiment_scores['compound']
-        ])
+        # Usar el método optimizado para obtener el vector de sentimiento
+        # Si hay notas del usuario, usar esas; si no, usar todo el texto de preferencias
+        sentiment_text = user_notes_text if user_notes_text else full_text
+        sentiment_vector = self._get_sentiment_vector(sentiment_text)
         
+        logger.info(f"📊 User embedding dimensions: semantic={len(semantic_embedding)}, sentiment={len(sentiment_vector)}")
         return np.concatenate([semantic_embedding, sentiment_vector])
 
     def _filter_places_by_distance(self, places: List[Dict], max_distance_km: float, user_lat: float, user_lon: float) -> Tuple[List[Dict], List[int]]:
@@ -684,53 +777,113 @@ Categoría: {place.get('category', '')}
                 
         return ". ".join(query_parts)
 
-    def _calculate_cosine_similarity(self, user_embedding: np.ndarray, place_embeddings: List[np.ndarray]) -> List[float]:
-        """Enhanced cosine similarity with sentiment adjustment"""
+    def _calculate_cosine_similarity(self, user_embedding: np.ndarray, place_embeddings: List[np.ndarray], 
+                                   user_preferences: Dict = None, places: List[Dict] = None) -> List[float]:
+        """Enhanced cosine similarity with sentiment adjustment and category penalties"""
         similarities = []
         
+        logger.info(f"🔍 Calculating similarity for {len(place_embeddings)} places")
+        logger.info(f"📊 User embedding shape: {user_embedding.shape}")
+        
+        # Verificar que el embedding del usuario tenga el tamaño correcto
+        if len(user_embedding) < 4:
+            logger.error(f"❌ User embedding too small: {len(user_embedding)} dimensions")
+            # Fallback: usar solo similitud semántica básica
+            for place_emb in place_embeddings:
+                if len(place_emb) >= len(user_embedding):
+                    semantic_sim = cosine_similarity(
+                        user_embedding.reshape(1, -1),
+                        place_emb[:len(user_embedding)].reshape(1, -1)
+                    )[0][0]
+                    similarities.append(max(0.0, semantic_sim))
+                else:
+                    similarities.append(0.0)
+            return similarities
+        
         # Separar componentes del embedding del usuario
-        user_semantic = user_embedding[:-4]  # Primeras 384 dimensiones (MiniLM)
+        user_semantic = user_embedding[:-4]  # Primeras N-4 dimensiones (MiniLM)
         user_sentiment = user_embedding[-4:]  # Últimas 4 dimensiones (sentimiento)
         
-        for place_emb in place_embeddings:
-            # Separar componentes del embedding del lugar
-            place_semantic = place_emb[:-4]
-            place_sentiment = place_emb[-4:]
-            
-            # 1. Calcular similitud semántica tradicional
-            semantic_sim = cosine_similarity(
-                user_semantic.reshape(1, -1),
-                place_semantic.reshape(1, -1)
-            )[0][0]
-            
-            # 2. Calcular alineamiento de sentimiento
-            user_pos, user_neg = user_sentiment[0], user_sentiment[1]
-            place_pos, place_neg = place_sentiment[0], place_sentiment[1]
-
-            # Premiar la coincidencia de sentimientos (positivo con positivo, negativo con negativo)
-            sentiment_similarity = (user_pos * place_pos) + (user_neg * place_neg)
-            
-            # Penalizar la discrepancia de sentimientos (positivo con negativo)
-            sentiment_opposition = (user_pos * place_neg) + (user_neg * place_pos)
-            
-            # El alineamiento va de -1 (totalmente opuesto) a 1 (totalmente alineado)
-            alignment = sentiment_similarity - sentiment_opposition
-            
-            # Normalizar a rango [0, 1]
-            sentiment_alignment = (alignment + 1) / 2
-            
-            # 3. Combinar multiplicando la similitud semántica por el alineamiento de sentimiento
-            # Esto actúa como una "puerta": si el sentimiento no está alineado, la similitud baja drásticamente
-            combined_sim = semantic_sim * sentiment_alignment
-            similarities.append(combined_sim)
+        logger.info(f"📊 User semantic dimensions: {len(user_semantic)}, sentiment: {len(user_sentiment)}")
         
+        for i, place_emb in enumerate(place_embeddings):
+            try:
+                # Verificar que el embedding del lugar tenga el tamaño correcto
+                if len(place_emb) < 4:
+                    logger.warning(f"⚠️ Place {i} embedding too small: {len(place_emb)} dimensions")
+                    similarities.append(0.0)
+                    continue
+                
+                # Separar componentes del embedding del lugar
+                place_semantic = place_emb[:-4]
+                place_sentiment = place_emb[-4:]
+                
+                # Verificar que las dimensiones semánticas coincidan
+                if len(user_semantic) != len(place_semantic):
+                    logger.warning(f"⚠️ Dimension mismatch for place {i}: user={len(user_semantic)}, place={len(place_semantic)}")
+                    # Usar la dimensión menor
+                    min_dim = min(len(user_semantic), len(place_semantic))
+                    user_sem_truncated = user_semantic[:min_dim]
+                    place_sem_truncated = place_semantic[:min_dim]
+                else:
+                    user_sem_truncated = user_semantic
+                    place_sem_truncated = place_semantic
+                
+                # 1. Calcular similitud semántica tradicional
+                semantic_sim = cosine_similarity(
+                    user_sem_truncated.reshape(1, -1),
+                    place_sem_truncated.reshape(1, -1)
+                )[0][0]
+                
+                # Asegurar que la similitud esté en rango válido
+                semantic_sim = max(-1.0, min(1.0, semantic_sim))
+                
+                # 2. Calcular alineamiento de sentimiento
+                user_pos, user_neg = user_sentiment[0], user_sentiment[1]
+                place_pos, place_neg = place_sentiment[0], place_sentiment[1]
+
+                # Premiar la coincidencia de sentimientos (positivo con positivo, negativo con negativo)
+                sentiment_similarity = (user_pos * place_pos) + (user_neg * place_neg)
+                
+                # Penalizar la discrepancia de sentimientos (positivo con negativo)
+                sentiment_opposition = (user_pos * place_neg) + (user_neg * place_pos)
+                
+                # El alineamiento va de -1 (totalmente opuesto) a 1 (totalmente alineado)
+                alignment = sentiment_similarity - sentiment_opposition
+                
+                # Normalizar a rango [0, 1]
+                sentiment_alignment = (alignment + 1) / 2
+                sentiment_alignment = max(0.0, min(1.0, sentiment_alignment))
+                
+                # 3. Combinar con peso balanceado (70% semántica, 30% sentimiento)
+                # Si el sentimiento es muy bajo, usar más peso semántico
+                if sentiment_alignment < 0.3:
+                    combined_sim = 0.9 * semantic_sim + 0.1 * sentiment_alignment
+                else:
+                    combined_sim = 0.7 * semantic_sim + 0.3 * sentiment_alignment
+                
+                # Aplicar penalización por categoría si está disponible
+                if user_preferences and places and i < len(places):
+                    category_penalty = self._calculate_category_penalty(user_preferences, places[i])
+                    combined_sim = combined_sim * category_penalty
+                
+                # Asegurar que el resultado esté en rango válido
+                combined_sim = max(0.0, min(1.0, combined_sim))
+                similarities.append(combined_sim)
+                
+            except Exception as e:
+                logger.error(f"❌ Error calculating similarity for place {i}: {e}")
+                similarities.append(0.0)
+        
+        logger.info(f"✅ Calculated {len(similarities)} similarities, range: {min(similarities):.3f} - {max(similarities):.3f}")
         return similarities
 
 
     def _filter_places_by_similarity(self, places: List[Dict], place_embeddings: List[np.ndarray],
-                                   user_embedding: np.ndarray, similarity_threshold: float = 0.1) -> Tuple[List[Dict], List[np.ndarray], List[float]]:
+                                   user_embedding: np.ndarray, user_preferences: Dict = None, 
+                                   similarity_threshold: float = 0.1) -> Tuple[List[Dict], List[np.ndarray], List[float]]:
         """Filter places by enhanced cosine similarity"""
-        similarities = self._calculate_cosine_similarity(user_embedding, place_embeddings)
+        similarities = self._calculate_cosine_similarity(user_embedding, place_embeddings, user_preferences, places)
         
         # Ordenar por similitud descendente
         sorted_data = sorted(zip(places, place_embeddings, similarities), 
@@ -909,41 +1062,107 @@ Be realistic with time estimates based on the tourist's interests and the nature
         # Ordenar lugares por puntuación mejorada
         sorted_places = sorted(zip(distance_filtered_places, enhanced_scores), 
                              key=lambda x: x[1], reverse=True)
-        
-        filtered_places = [place for place, score in sorted_places if score > 0.1]
-        filtered_scores = [score for place, score in sorted_places if score > 0.1]
 
         # Generate embeddings for all distance-filtered places
+        logger.info(f"🔄 Generating embeddings for {len(distance_filtered_places)} places...")
         distance_place_embeddings = self._generate_place_embeddings(distance_filtered_places)
+        logger.info(f"✅ Generated {len(distance_place_embeddings)} place embeddings")
+        
+        logger.info(f"🔄 Generating user embedding from preferences...")
         user_embedding = self._generate_user_embedding(user_preferences)
+        logger.info(f"✅ Generated user embedding with {len(user_embedding)} dimensions")
         
         # Calculate similarities for all places
-        all_similarities = self._calculate_cosine_similarity(user_embedding, distance_place_embeddings)
+        logger.info(f"🔄 Calculating similarities between user and places...")
+        all_similarities = self._calculate_cosine_similarity(user_embedding, distance_place_embeddings, 
+                                                           user_preferences, distance_filtered_places)
+        logger.info(f"✅ Calculated {len(all_similarities)} similarity scores")
         
         # Use all places but order them by similarity to prioritize the most relevant ones
         places_with_similarity = list(zip(distance_filtered_places, distance_place_embeddings, all_similarities))
         places_with_similarity.sort(key=lambda x: x[2], reverse=True)  # Sort by similarity descending
         
+        # Imprimir lugares ordenados por similitud en la terminal
+        print("\n" + "="*80)
+        print("🎯 LUGARES ORDENADOS POR SIMILITUD COSENO")
+        print("="*80)
+        
+        # Mostrar contexto de preferencias del usuario
+        print("👤 PREFERENCIAS DEL USUARIO:")
+        if 'category_interest' in user_preferences:
+            high_prefs = [(cat, score) for cat, score in user_preferences['category_interest'].items() if score >= 4]
+            if high_prefs:
+                print(f"   🔥 Intereses altos: {', '.join([f'{cat}({score}/5)' for cat, score in high_prefs])}")
+        if user_preferences.get('user_notes'):
+            print(f"   📝 Notas: {user_preferences['user_notes'][:60]}...")
+        print(f"   🏙️ Ciudad: {user_preferences.get('city', 'N/A')}")
+        print("-" * 80)
+        
+        # Mostrar lugares ordenados
+        for i, (place, embedding, similarity) in enumerate(places_with_similarity, 1):
+            place_name = place.get('name', 'Lugar desconocido')
+            place_category = place.get('category', 'general')
+            
+            # Calcular penalización para mostrar información adicional
+            category_penalty = self._calculate_category_penalty(user_preferences, place)
+            
+            # Agregar indicador visual para similitudes altas
+            if similarity >= 0.7:
+                indicator = "🔥"
+            elif similarity >= 0.5:
+                indicator = "⭐"
+            elif similarity >= 0.3:
+                indicator = "✅"
+            else:
+                indicator = "📍"
+            
+            # Agregar indicador de penalización
+            if category_penalty >= 1.2:
+                penalty_indicator = "💚"  # Boost
+            elif category_penalty == 1.0:
+                penalty_indicator = "⚪"  # Neutral
+            elif category_penalty >= 0.5:
+                penalty_indicator = "🟡"  # Penalización moderada
+            else:
+                penalty_indicator = "🔴"  # Penalización fuerte
+            
+            print(f"{i:2d}. {similarity:.4f} {indicator} | {place_name} ({place_category}) {penalty_indicator} x{category_penalty:.1f}")
+        
+        print("="*80)
+        print(f"📊 Total de lugares ordenados: {len(places_with_similarity)}")
+        print(f"📊 Rango de similitud: {min(all_similarities):.4f} - {max(all_similarities):.4f}")
+        if len(places_with_similarity) > 0:
+            avg_similarity = sum(all_similarities) / len(all_similarities)
+            print(f"📊 Similitud promedio: {avg_similarity:.4f}")
+        print("="*80 + "\n")
+        
         # Separate the sorted data
+        sorted_places = [item[0] for item in places_with_similarity]
         place_embeddings = [item[1] for item in places_with_similarity]
         similarity_scores = [item[2] for item in places_with_similarity]
         
-        logger.info(f"Using all {len(filtered_places)} places found (sorted by cosine similarity)")
+        # Use the sorted places instead of the enhanced similarity filtered places
+        # This ensures consistency between places, embeddings, and similarity scores
+        final_places = sorted_places
+        final_scores = similarity_scores
+        
+        logger.info(f"📊 Using {len(final_places)} places sorted by cosine similarity")
+        logger.info(f"📊 Similarity range: {min(similarity_scores):.3f} - {max(similarity_scores):.3f}")
 
         # Calcular matriz de tiempos para todos los lugares
-        time_matrix = self._calculate_time_matrix_ors(filtered_places, user_lat, user_lon, transport_mode)
+        time_matrix = self._calculate_time_matrix_ors(final_places, user_lat, user_lon, transport_mode)
 
         # Procesar con LLM todos los lugares encontrados (solo para estimaciones de tiempo)
-        llm_prompt = self._get_llm_recommendation_prompt(filtered_places, user_preferences)
+        llm_prompt = self._get_llm_recommendation_prompt(final_places, user_preferences)
         llm_response = self._call_mistral_llm(llm_prompt)
-        llm_time_estimates = self._parse_llm_time_estimates(llm_response, filtered_places)
+        llm_time_estimates = self._parse_llm_time_estimates(llm_response, final_places)
 
        # Extraer categorías de la base de datos (no del LLM)
-        db_categories = [place.get('category', 'general') for place in filtered_places]
+        db_categories = [place.get('category', 'general') for place in final_places]
 
         return {
-            'filtered_places': filtered_places,
-            'enhanced_scores': filtered_scores,
+            'filtered_places': final_places,
+            'enhanced_scores': final_scores,
             'time_matrix': time_matrix,
             'place_embeddings': place_embeddings,
             'user_embedding': user_embedding,
@@ -953,7 +1172,7 @@ Be realistic with time estimates based on the tourist's interests and the nature
             'user_preferences': user_preferences,
             'transport_mode': transport_mode,
             'db_categories': db_categories ,
-            'data_source': "ChromaDB semantic search with cosine similarity ranking"
+            'data_source': "ChromaDB semantic search with enhanced cosine similarity ranking"
         }
 
     def preprocess_text(self, text: str) -> str:
@@ -1039,6 +1258,28 @@ Be realistic with time estimates based on the tourist's interests and the nature
             # Fallback to simple method
             words = text.split()
             return [w.lower() for w in words if len(w) > 4 and w.lower() not in self.spanish_stopwords][:max_keywords]
+
+    def _get_sentiment_vector(self, text: str) -> np.ndarray:
+        """
+        Método optimizado para obtener solo el vector de sentimiento (4 dimensiones)
+        sin toda la información adicional cuando solo necesitamos el vector.
+        """
+        if not text or not isinstance(text, str) or not text.strip():
+            return np.array([0.0, 0.0, 1.0, 0.0])  # neutral por defecto
+        
+        try:
+            analysis = self.sentiment_analyzer.predict(text)
+            probas = analysis.probas
+            
+            return np.array([
+                probas.get('POS', 0.0),
+                probas.get('NEG', 0.0),
+                probas.get('NEU', 1.0),
+                probas.get('POS', 0.0) - probas.get('NEG', 0.0)  # compound
+            ])
+        except Exception as e:
+            logger.error(f"Error in sentiment vector calculation: {e}")
+            return np.array([0.0, 0.0, 1.0, 0.0])
 
     def analyze_query_sentiment(self, text: str) -> Dict[str, Any]:
         """

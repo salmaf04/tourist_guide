@@ -110,7 +110,7 @@ class RouteFinder:
 
     #Similitud coseno entre ambos embeddings
     def node_goal_func(self,node_id,tourist_param):
-        return self.ra._calculate_cosine_similarity(tourist_param,[self.node_params[node_id]['vector']])[0] 
+        return self.ra.calculate_cosine_similarity(tourist_param,[self.node_params[node_id]['vector']])[0] 
        
 
     def goal_func(self, route, time, tourist_param):

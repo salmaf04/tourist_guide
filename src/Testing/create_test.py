@@ -287,11 +287,11 @@ class TestCreator:
     
     def evaluate(self, routes, user_preferences, meta_data):
         ra=rag.RAGPlanner()
-        emb1=ra._generate_user_embedding(user_preferences)
+        emb1=ra.similarity_calculator.generate_user_embedding(user_preferences)
         score=-1
         for route in routes:
-            emb2=ra._generate_user_embedding(self.generate_preferences_from_route(route,user_preferences,meta_data))
-            score=max(ra._calculate_cosine_similarity(emb1,[emb2])[0],score)
+            emb2=ra.similarity_calculator.generate_user_embedding(self.generate_preferences_from_route(route,user_preferences,meta_data))
+            score=max(ra.calculate_cosine_similarity(emb1,[emb2])[0],score)
         
         return score
     

@@ -1062,6 +1062,8 @@ Be realistic with time estimates based on the tourist's interests and the nature
         # Ordenar lugares por puntuación mejorada
         sorted_places = sorted(zip(distance_filtered_places, enhanced_scores), 
                              key=lambda x: x[1], reverse=True)
+        
+        sorted_places = sorted_places[:50]  # Limitar a los 50 mejores lugares
 
         # Generate embeddings for all distance-filtered places
         logger.info(f"🔄 Generating embeddings for {len(distance_filtered_places)} places...")

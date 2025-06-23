@@ -313,7 +313,7 @@ class TestCreator:
             })
         # Ordenar por función objetivo (mayor es mejor) y tomar las 10 mejores
         route_evaluations.sort(key=lambda x: x['goal_value'], reverse=True)
-        top_10_routes = [eval_data['route'] for eval_data in route_evaluations[:2]]
+        top_10_routes = [eval_data['route'] for eval_data in route_evaluations[:10]]
         
         # Simular solo las 10 mejores rutas para obtener las mejores por satisfacción
         from agent_generator.route_simulator import simulate_and_rank_routes
@@ -321,7 +321,7 @@ class TestCreator:
             routes=top_10_routes,
             node_params=meta_data['node_params'],
             top_n=3,
-            simulation_steps=1,
+            simulation_steps=3,
             tourist_name="Turista_Simulado"
         )
         optimized_routes = [result['route'] for result in optimized_routes_with_details]

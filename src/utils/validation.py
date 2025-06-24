@@ -3,7 +3,7 @@ import datetime
 from sklearn.metrics.pairwise import cosine_similarity
 
 
-def is_incomplete_or_outdated(rag_data, query=None, min_places=5, min_description_length=30, min_cosine_threshold=0.25):
+def is_incomplete_or_outdated(rag_data, query=None, min_places=10, min_description_length=30, min_cosine_threshold=0.25):
     """
     Evalúa si los datos RAG son insuficientes o desactualizados según múltiples criterios, incluyendo similitud de cosenos.
     Args:
@@ -17,6 +17,11 @@ def is_incomplete_or_outdated(rag_data, query=None, min_places=5, min_descriptio
     """
     if not isinstance(rag_data, dict) or 'filtered_places' not in rag_data:
         return True, "Estructura de datos inválida"
+    
+    # Check if RAG explicitly indicates crawler is needed
+    if rag_data.get('needs_crawler', False):
+        return True, rag_data.get('llm_response', 'No data available - crawler needed')
+    
     places = rag_data.get('filtered_places', [])
     if len(places) < min_places:
         return True, f"Sólo se encontraron {len(places)} lugares (mínimo {min_places} esperado)"

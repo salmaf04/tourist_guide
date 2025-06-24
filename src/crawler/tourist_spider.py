@@ -49,13 +49,7 @@ class TouristSpider(scrapy.Spider):
         self.current_city = None
         # ----------------------------------------------------------
 
-        # FILTRO ANTI-MADRID: Bloquear Madrid como ciudad objetivo
-        if target_city and target_city.lower() == 'madrid':
-            self.logger.info(f"🚫 MADRID BLOQUEADO: No se procesará Madrid como ciudad objetivo")
-            self.target_city = "Barcelona"  # Usar Barcelona como alternativa
-            self.logger.info(f"✅ Usando {self.target_city} como ciudad alternativa")
-        else:
-            self.target_city = target_city
+        self.target_city = target_city
         
         # Configurar max_pages si se proporciona
         if max_pages:
@@ -81,7 +75,7 @@ class TouristSpider(scrapy.Spider):
         all_city_urls = {**self.city_urls, **self.city_urls_extra}
 
         # --- NUEVO: Inicializar ciudades pendientes ---
-        self.cities_pending = [city for city in all_city_urls.keys() if city.lower() != 'madrid']
+        self.cities_pending = list(all_city_urls.keys())
         self.cities_completed = set()
         self.current_city = self.cities_pending[0] if self.cities_pending else None
         # ------------------------------------------------
@@ -222,11 +216,7 @@ class TouristSpider(scrapy.Spider):
         """Método principal de parsing."""
         self.logger.info(f"Procesando URL: {response.url}")
         
-        # FILTRO ANTI-MADRID: Verificación adicional
-        if self.url_filter.is_madrid_url(response.url):
-            self.logger.info(f"🚫 URL de Madrid bloqueada en parse: {response.url}")
-            return
-        
+                
         # Control del número máximo de páginas
         if self.stats_manager.crawled_pages >= self.max_pages:
             return
@@ -234,19 +224,28 @@ class TouristSpider(scrapy.Spider):
         # Identificar ciudad de la URL actual
         current_city = self.city_identifier.get_city_from_url(response.url)
 
+        # Si hay una ciudad objetivo específica, solo procesar esa ciudad
+        if self.target_city:
+            if current_city.lower() != self.target_city.lower():
+                self.logger.debug(f"🚫 Saltando URL de {current_city} - solo procesando {self.target_city}: {response.url}")
+                return
+            # Forzar current_city a ser la ciudad objetivo para consistencia
+            current_city = self.target_city
+
         # --- NUEVO: Saltar ciudades completadas ---
         if current_city in self.cities_completed:
             self.logger.info(f"🚫 Ciudad {current_city} ya completada. Saltando URL: {response.url}")
             return
         # ------------------------------------------------
 
-        # CONTROL DE UMBRAL POR CIUDAD
-        if not self.stats_manager.can_process_city_page(current_city):
+        # CONTROL DE UMBRAL POR CIUDAD - Solo aplicar límites si NO hay una ciudad objetivo específica
+        if not self.target_city and not self.stats_manager.can_process_city_page(current_city):
             self.logger.info(f"🚫 Límite de páginas alcanzado para {current_city}")
             self._check_and_advance_city(current_city)
             return
         
-        if not self.stats_manager.can_add_city_place(current_city):
+        # Solo aplicar límites si NO hay una ciudad objetivo específica
+        if not self.target_city and not self.stats_manager.can_add_city_place(current_city):
             self.logger.info(f"🚫 Límite de lugares alcanzado para {current_city}")
             self._check_and_advance_city(current_city)
             return
@@ -311,6 +310,11 @@ class TouristSpider(scrapy.Spider):
     
     def _improve_city_identification(self, lugar, url, current_city):
         """Mejora la identificación de ciudad usando múltiples estrategias."""
+        # Si hay una ciudad objetivo específica, siempre usar esa ciudad
+        if self.target_city:
+            self.logger.debug(f"Usando ciudad objetivo {self.target_city} para {lugar.get('nombre')}")
+            return self.target_city
+        
         lugar_ciudad = lugar.get('ciudad', current_city)
         
         # Aplicar múltiples estrategias para evitar "Unknown"
@@ -414,15 +418,25 @@ class TouristSpider(scrapy.Spider):
                     continue
                 # Verificar ciudad del enlace
                 link_city = self.city_identifier.get_city_from_url(clean_url)
+                
+                # Si hay una ciudad objetivo específica, solo seguir enlaces de esa ciudad
+                if self.target_city:
+                    if link_city.lower() != self.target_city.lower():
+                        self.logger.debug(f"🚫 Saltando enlace de {link_city} - solo siguiendo enlaces de {self.target_city}")
+                        continue
+                    # Forzar link_city a ser la ciudad objetivo
+                    link_city = self.target_city
+                
                 # --- NUEVO: Saltar ciudades completadas ---
                 if link_city in self.cities_completed:
                     continue
-                # CONTROL DE UMBRAL: No seguir enlaces de ciudades que alcanzaron el límite
-                if not self.stats_manager.can_process_city_page(link_city):
+                # CONTROL DE UMBRAL: No seguir enlaces de ciudades que alcanzaron el límite (solo si no hay ciudad objetivo)
+                if not self.target_city and not self.stats_manager.can_process_city_page(link_city):
                     self.logger.debug(f"Saltando enlace de {link_city} - límite de páginas alcanzado")
                     self._check_and_advance_city(link_city)
                     continue
-                if not self.stats_manager.can_add_city_place(link_city):
+                # Solo aplicar límites si NO hay una ciudad objetivo específica
+                if not self.target_city and not self.stats_manager.can_add_city_place(link_city):
                     self.logger.debug(f"Saltando enlace de {link_city} - límite de lugares alcanzado")
                     self._check_and_advance_city(link_city)
                     continue

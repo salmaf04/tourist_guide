@@ -95,14 +95,22 @@ class DatabaseManager:
             logger.error(f"Failed to load places from ChromaDB: {e}")
             raise RuntimeError(f"ChromaDB is required but failed to load data: {e}")
     
-    def semantic_search_chroma(self, query: str, n_results: int = 50) -> List[Dict]:
-        """Perform semantic search in ChromaDB with deduplication."""
+    def semantic_search_chroma(self, query: str, n_results: int = 50, city_filter: str = None) -> List[Dict]:
+        """Perform semantic search in ChromaDB with optional city filtering and deduplication."""
         try:
-            search_results = self.chroma_collection.query(
-                query_texts=[query],
-                n_results=n_results,
-                include=["metadatas", "documents", "distances"]
-            )
+            # Build query parameters
+            query_params = {
+                "query_texts": [query],
+                "n_results": n_results,
+                "include": ["metadatas", "documents", "distances"]
+            }
+            
+            # Add city filter if provided
+            if city_filter:
+                query_params["where"] = {"city": city_filter}
+                logger.info(f"🔍 Semantic search with city filter: {city_filter}")
+            
+            search_results = self.chroma_collection.query(**query_params)
 
             if not search_results["documents"] or not search_results["documents"][0]:
                 return []

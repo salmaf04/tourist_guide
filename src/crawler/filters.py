@@ -4,7 +4,7 @@ Filtros y validadores para el crawler turístico.
 
 from urllib.parse import urlparse
 from .config import (
-    BLOCKED_DOMAINS, MADRID_PATTERNS, EXCLUDED_PATTERNS, 
+    BLOCKED_DOMAINS, EXCLUDED_PATTERNS, 
     EXCLUDED_COUNTRIES, SPANISH_DOMAINS, TOURIST_TERMS,
     CITY_URLS, CITY_URLS_EXTRA
 )
@@ -17,26 +17,7 @@ class URLFilter:
         self.logger = logger
         self.all_city_urls = {**CITY_URLS, **CITY_URLS_EXTRA}
     
-    def filter_madrid_urls(self, urls):
-        """Filtra URLs que contengan Madrid."""
-        filtered_urls = []
         
-        for url in urls:
-            url_lower = url.lower()
-            is_madrid = any(pattern in url_lower for pattern in MADRID_PATTERNS)
-            if is_madrid:
-                if self.logger:
-                    self.logger.info(f"🚫 URL inicial de Madrid filtrada: {url}")
-            else:
-                filtered_urls.append(url)
-        
-        return filtered_urls
-    
-    def is_madrid_url(self, url):
-        """Verifica si una URL contiene contenido de Madrid."""
-        url_lower = url.lower()
-        return any(pattern in url_lower for pattern in MADRID_PATTERNS)
-    
     def is_blocked_domain(self, url):
         """Verifica si la URL pertenece a un dominio bloqueado."""
         url_lower = url.lower()
@@ -101,29 +82,23 @@ class URLFilter:
     def is_url_relevant(self, url, city):
         """Verifica si la URL es relevante para la ciudad y es de España."""
         try:
-            # Filtro 1: Bloquear Madrid
-            if self.is_madrid_url(url):
-                if self.logger:
-                    self.logger.debug(f"🚫 URL BLOQUEADA por contener Madrid: {url}")
-                return False
-            
-            # Filtro 2: Dominios bloqueados
+            # Filtro 1: Dominios bloqueados
             if self.is_blocked_domain(url):
                 return False
             
-            # Filtro 3: Patrones excluidos
+            # Filtro 2: Patrones excluidos
             if self.has_excluded_patterns(url):
                 return False
             
-            # Filtro 4: Países excluidos
+            # Filtro 3: Países excluidos
             if self.has_excluded_countries(url):
                 return False
             
-            # Filtro 5: Dominios permitidos
+            # Filtro 4: Dominios permitidos
             if not self.is_spanish_domain_allowed(url):
                 return False
             
-            # Filtro 6: Relevancia para la ciudad
+            # Filtro 5: Relevancia para la ciudad
             city_lower = city.lower()
             url_lower = url.lower()
             
@@ -156,27 +131,7 @@ class ContentFilter:
     def __init__(self, logger=None):
         self.logger = logger
     
-    def is_madrid_content(self, place_data):
-        """Verifica si el contenido es de Madrid."""
-        if not place_data:
-            return False
         
-        nombre_lugar = place_data.get('nombre', '').lower()
-        ciudad_lugar = place_data.get('ciudad', '').lower()
-        descripcion_lugar = place_data.get('descripcion', '').lower()
-        
-        madrid_indicators = ['madrid']
-        
-        for indicator in madrid_indicators:
-            if (indicator in nombre_lugar or 
-                indicator in ciudad_lugar or 
-                indicator in descripcion_lugar):
-                if self.logger:
-                    self.logger.info(f"🚫 Lugar rechazado por contener Madrid: {place_data.get('nombre')}")
-                return True
-        
-        return False
-    
     def validate_place_data(self, place_data):
         """Valida que los datos del lugar sean completos y válidos."""
         if not place_data:
@@ -189,9 +144,5 @@ class ContentFilter:
                 if self.logger:
                     self.logger.warning(f"Lugar con campo {field} vacío: {place_data.get('nombre', 'N/A')}")
                 return False
-        
-        # Verificar que no sea contenido de Madrid
-        if self.is_madrid_content(place_data):
-            return False
         
         return True

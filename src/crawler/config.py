@@ -6,8 +6,8 @@ Configuración y constantes para el crawler turístico.
 CRAWLER_CONFIG = {
     'max_pages': 50,
     'max_depth': 2,
-    'max_pages_per_city': 3,
-    'max_places_per_city': 8,
+    'max_pages_per_city': 100,
+    'max_places_per_city': 100,
 }
 
 # URLs organizadas por ciudades principales
@@ -25,7 +25,13 @@ CITY_URLS = {
     "Granada": [
         "https://www.spain.info/en/destination/granada/",
         "https://www.travelandleisure.com/travel-guide/granada",
-        "https://www.europeanbestdestinations.com/destinations/granada/"
+        "https://www.europeanbestdestinations.com/destinations/granada/",
+        "https://www.spain.info/en/destination/granada/",
+        "https://www.travelandleisure.com/travel-guide/granada",
+        "https://www.europeanbestdestinations.com/destinations/granada/",
+        "https://www.andalucia.org/en/granada",
+        "https://www.lonelyplanet.com/spain/andalucia/granada",
+        "https://www.visitspain.com/en/cities/granada/"
     ],
     "Córdoba": [
         "https://www.spain.info/en/destination/cordoba/",
@@ -86,6 +92,56 @@ CITY_URLS = {
         "https://www.spain.info/en/destination/tenerife/",
         "https://www.holidify.com/places/tenerife/sightseeing-and-things-to-do.html",
         "https://travel.usnews.com/Tenerife_Spain/Things_To_Do/"
+    ],
+    "Murcia": [
+        "https://www.spain.info/en/destination/murcia/",
+        "https://www.murciaturistica.es/en/",
+        "https://www.murcia.es/web/portal/turismo",
+        "https://www.lonelyplanet.com/spain/murcia",
+        "https://www.timeout.com/murcia/attractions",
+        "https://www.europeanbestdestinations.com/destinations/murcia/"
+    ],
+    "Barcelona": [
+        "https://www.spain.info/en/destination/barcelona/",
+        "https://www.barcelonaturisme.com/wv3/en/",
+        "https://www.timeout.com/barcelona/attractions",
+        "https://www.lonelyplanet.com/spain/catalonia/barcelona",
+        "https://www.europeanbestdestinations.com/destinations/barcelona/"
+    ],
+    "Valencia": [
+        "https://www.spain.info/en/destination/valencia/",
+        "https://www.visitvalencia.com/en/",
+        "https://www.timeout.com/valencia/attractions",
+        "https://www.lonelyplanet.com/spain/valencia/valencia",
+        "https://www.comunitatvalenciana.com/en/ciudad/valencia"
+    ],
+    "Bilbao": [
+        "https://www.spain.info/en/destination/bilbao/",
+        "https://www.bilbaoturismo.net/BilbaoTurismo/en/",
+        "https://www.timeout.com/bilbao/attractions",
+        "https://www.lonelyplanet.com/spain/basque-country/bilbao",
+        "https://www.europeanbestdestinations.com/destinations/bilbao/"
+    ],
+    "Salamanca": [
+        "https://www.spain.info/en/destination/salamanca/",
+        "https://www.salamanca.es/en/",
+        "https://www.timeout.com/salamanca/attractions",
+        "https://www.lonelyplanet.com/spain/castilla-y-leon/salamanca",
+        "https://www.europeanbestdestinations.com/destinations/salamanca/"
+    ],
+    "Zaragoza": [
+        "https://www.spain.info/en/destination/zaragoza/",
+        "https://www.zaragoza.es/ciudad/turismo/en/",
+        "https://www.timeout.com/zaragoza/attractions",
+        "https://www.lonelyplanet.com/spain/aragon/zaragoza",
+        "https://www.europeanbestdestinations.com/destinations/zaragoza/"
+    ],
+    "Santander": [
+        "https://www.spain.info/en/destination/santander/",
+        "https://www.turismodesantander.com/en/",
+        "https://www.timeout.com/santander/attractions",
+        "https://www.lonelyplanet.com/spain/cantabria/santander",
+        "https://www.europeanbestdestinations.com/destinations/santander/"
     ]
 }
 

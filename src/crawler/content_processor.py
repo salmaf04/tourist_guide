@@ -44,8 +44,7 @@ class ContentProcessor:
             f"Si el lugar está claramente en {city}, usa '{city}'. "
             f"Si está en otra ciudad española, usa el nombre correcto de esa ciudad. "
             f"Solo incluye lugares turísticos reales de España (museos, monumentos, parques, plazas, etc.). "
-            f"NO incluyas lugares de Madrid bajo ninguna circunstancia. "
-            f"Responde ÚNICAMENTE con un objeto JSON válido (sin bloques de código markdown). "
+                        f"Responde ÚNICAMENTE con un objeto JSON válido (sin bloques de código markdown). "
             f"Formato requerido: "
             f'{{"lugares": [{{"nombre": "nombre específico del lugar", "ciudad": "nombre correcto de la ciudad española", "categoria": "tipo de atracción", "descripcion": "descripción detallada", "coordenadas": null}}]}}\n\n'
             f"URL de origen: {url}\n"
@@ -114,10 +113,7 @@ class ContentProcessor:
             if not lugar.get('nombre'):
                 continue
             
-            # Filtrar contenido de Madrid
-            if self.content_filter.is_madrid_content(lugar):
-                continue
-            
+                        
             # Validar datos completos
             if not self.content_filter.validate_place_data(lugar):
                 continue

@@ -57,36 +57,57 @@ class RAGPlanner:
         search_query = self.nlp_processor.create_search_query_from_preferences(user_preferences)
         logger.info(f"🔍 Search query: {search_query}")
         
-        # Step 2: Perform semantic search
-        semantic_places = self.database_manager.semantic_search_chroma(search_query, n_results=100)
-        logger.info(f"📊 Semantic search found {len(semantic_places)} places")
-
-        # Step 3: Filter by city
+        # Step 2: Get city for filtering
         city = user_preferences.get('city', '')
         logger.info(f"🏙️ Target city: {city}")
         
-        if semantic_places and city:
-            city_places = self.place_filter.filter_places_by_city(semantic_places, city)
-            logger.info(f"📍 City filtering from semantic search: {len(city_places)} places")
-            if not city_places:
+        # Step 3: Perform semantic search with city filter
+        if city:
+            semantic_places = self.database_manager.semantic_search_chroma(search_query, n_results=100, city_filter=city)
+            logger.info(f"📊 Semantic search with city filter found {len(semantic_places)} places for {city}")
+            
+            # If no results with semantic search, fallback to all places from that city
+            if not semantic_places:
+                logger.info(f"⚠️ No semantic search results for {city}, falling back to all places from city")
                 city_places = self.place_filter.filter_places_by_city(self.places_data, city)
-                logger.info(f"📍 City filtering from all data: {len(city_places)} places")
+                logger.info(f"📍 Fallback city filtering: {len(city_places)} places")
+            else:
+                city_places = semantic_places
         else:
-            city_places = self.place_filter.filter_places_by_city(self.places_data, city)
-            logger.info(f"📍 City filtering from all data: {len(city_places)} places")
+            # If no city specified, perform semantic search without filter
+            semantic_places = self.database_manager.semantic_search_chroma(search_query, n_results=100)
+            logger.info(f"📊 Semantic search without city filter found {len(semantic_places)} places")
+            city_places = semantic_places
 
         if not city_places:
             available_cities = self.place_filter.get_available_cities(self.places_data)
-            logger.error(f"❌ No places found for city: {city}")
+            logger.warning(f"⚠️ No places found for city: {city}")
             logger.info(f"🏙️ Available cities in database: {available_cities}")
-            raise RuntimeError(f"No places found for city: {city}. Available cities: {available_cities}")
+            
+            # Return empty result instead of throwing error to allow dynamic validation
+            return {
+                'filtered_places': [],
+                'enhanced_scores': [],
+                'time_matrix': [],
+                'place_embeddings': [],
+                'user_embedding': [],
+                'llm_time_estimates': [],
+                'llm_response': f"No places found for {city}. Available cities: {available_cities}",
+                'similarity_scores': [],
+                'user_preferences': user_preferences,
+                'transport_mode': transport_mode,
+                'db_categories': [],
+                'data_source': f"No data available for {city} - dynamic crawler should be triggered",
+                'needs_crawler': True,
+                'available_cities': available_cities
+            }
 
         # Step 4: Filter by distance
         max_distance_km = user_preferences.get('max_distance', 10)
         logger.info(f"📏 Filtering by distance: {max_distance_km}km from ({user_lat}, {user_lon})")
         
         # Log some places before distance filtering
-        logger.info(f"📋 Places found for {city} before distance filtering:")
+        logger.info(f"📋 Places found for {city or 'all cities'} before distance filtering:")
         for i, place in enumerate(city_places[:5]):  # Show first 5 places
             place_lat, place_lon = self.geocoding_service.get_coordinates_from_place(place)
             logger.info(f"  {i+1}. {place['name']} - Coords: {place_lat}, {place_lon}")
@@ -98,7 +119,25 @@ class RAGPlanner:
 
         if not distance_filtered_places:
             self._log_distance_analysis(city_places, user_lat, user_lon, max_distance_km)
-            raise RuntimeError(f"No places found within {max_distance_km}km.")
+            logger.warning(f"⚠️ No places found within {max_distance_km}km for {city}")
+            
+            # Return result with insufficient data to trigger dynamic validation
+            return {
+                'filtered_places': [],
+                'enhanced_scores': [],
+                'time_matrix': [],
+                'place_embeddings': [],
+                'user_embedding': [],
+                'llm_time_estimates': [],
+                'llm_response': f"No places found within {max_distance_km}km for {city}. Try increasing the distance or check if more data is available.",
+                'similarity_scores': [],
+                'user_preferences': user_preferences,
+                'transport_mode': transport_mode,
+                'db_categories': [],
+                'data_source': f"Insufficient data for {city} within {max_distance_km}km - may need more data",
+                'needs_crawler': True,
+                'distance_issue': True
+            }
         
         # Step 5: Calculate enhanced similarity scores
         enhanced_scores = []
@@ -129,44 +168,53 @@ class RAGPlanner:
         # Step 9: Print similarity ranking for debugging
         self.place_filter.print_similarity_ranking(places_with_similarity, user_preferences)
         
-        # Step 10: Prepare final data
+        # Step 10: Prepare final data and limit to top 50 for time matrix calculation
         sorted_places = [item[0] for item in places_with_similarity]
         place_embeddings = [item[1] for item in places_with_similarity]
         similarity_scores = [item[2] for item in places_with_similarity]
         
-        final_places = sorted_places
-        final_scores = similarity_scores
+        # Limit to top 50 places for time matrix calculation (performance optimization)
+        max_places_for_time_matrix = 50
+        top_places_for_matrix = sorted_places[:max_places_for_time_matrix]
+        top_embeddings_for_matrix = place_embeddings[:max_places_for_time_matrix]
+        top_scores_for_matrix = similarity_scores[:max_places_for_time_matrix]
         
-        logger.info(f"📊 Using {len(final_places)} places sorted by cosine similarity")
+        logger.info(f"📊 Total places found: {len(sorted_places)}")
+        logger.info(f"📊 Using top {len(top_places_for_matrix)} places for time matrix calculation")
         logger.info(f"📊 Similarity range: {min(similarity_scores):.3f} - {max(similarity_scores):.3f}")
 
-        # Step 11: Calculate time matrix
+        # Step 11: Calculate time matrix only for top 50 places
         time_matrix = self.geocoding_service.calculate_time_matrix_ors(
-            final_places, user_lat, user_lon, transport_mode
+            top_places_for_matrix, user_lat, user_lon, transport_mode
         )
 
-        # Step 12: Process with LLM for time estimates
+        # Step 12: Process with LLM for time estimates (only for top 50)
         llm_response, llm_time_estimates = self.llm_service.process_places_with_llm(
-            final_places, user_preferences
+            top_places_for_matrix, user_preferences
         )
 
-        # Step 13: Extract categories from database
-        db_categories = [place.get('category', 'general') for place in final_places]
+        # Step 13: Extract categories from database (only for top 50)
+        db_categories = [place.get('category', 'general') for place in top_places_for_matrix]
+        
+        # Use top 50 as final places for route optimization
+        final_places = top_places_for_matrix
+        final_embeddings = top_embeddings_for_matrix
+        final_scores = top_scores_for_matrix
 
         # Step 14: Return comprehensive results
         return {
             'filtered_places': final_places,
             'enhanced_scores': final_scores,
             'time_matrix': time_matrix,
-            'place_embeddings': place_embeddings,
+            'place_embeddings': final_embeddings,
             'user_embedding': user_embedding,
             'llm_time_estimates': llm_time_estimates,
             'llm_response': llm_response,
-            'similarity_scores': similarity_scores,
+            'similarity_scores': final_scores,
             'user_preferences': user_preferences,
             'transport_mode': transport_mode,
             'db_categories': db_categories,
-            'data_source': "ChromaDB semantic search with enhanced cosine similarity ranking"
+            'data_source': f"ChromaDB semantic search with city filtering - top {len(final_places)} places by similarity"
         }
 
     def _log_distance_analysis(self, city_places: List[Dict], user_lat: float, 

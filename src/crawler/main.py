@@ -54,8 +54,7 @@ def setup_logging():
 def get_available_cities():
     """Retorna la lista de ciudades disponibles."""
     all_cities = list(CITY_URLS.keys()) + list(CITY_URLS_EXTRA.keys())
-    # Filtrar Madrid
-    return [city for city in all_cities if city.lower() != 'madrid']
+    return all_cities
 
 
 def create_scrapy_settings():

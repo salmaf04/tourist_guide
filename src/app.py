@@ -8,7 +8,7 @@ from RAG.rag import RAGPlanner
 from BestRoutes.meta_routes import RouteOptimizer
 from scrapy.crawler import CrawlerProcess
 from crawler.tourist_spider import TouristSpider
-from scrapy.utils.project import get_project_settings
+from crawler.config import CITY_URLS, CITY_URLS_EXTRA
 import datetime
 from utils.validation import is_incomplete_or_outdated, ensure_fresh_rag_data
 from utils.gemini_api_counter import api_counter
@@ -404,12 +404,14 @@ def fetch_tourism_data(city):
                 where={"city": city}
             )
             current_docs = len(query_result['ids'][0])
-            min_required = 5
+            min_required = 10
             
             st.info(f"📊 Estado inicial: {current_docs} documentos para {city} en la base de datos")
             
 
-            urls = TouristSpider.city_urls.get(city, [])
+            # Combine both URL dictionaries
+            all_city_urls = {**CITY_URLS, **CITY_URLS_EXTRA}
+            urls = all_city_urls.get(city, [])
             st.info(f"🌐 Procesando {len(urls)} fuentes web especializadas en turismo de {city}")
             
             # Mostrar algunas URLs de ejemplo
@@ -419,16 +421,12 @@ def fetch_tourism_data(city):
                 if len(urls) > 5:
                     st.write(f"... y {len(urls) - 5} fuentes más")
             
-            # Si hay suficientes documentos, no es necesario crawlear
-            if current_docs >= min_required:
-                st.success(f"✅ {city} ya tiene {current_docs} documentos en la base de datos")
-                return True
-            
-            # Ejecutar el crawler Scrapy
-            st.info(f"🔄 Necesitamos más datos para {city} (actual: {current_docs}, mínimo: {min_required})")
+            # Ejecutar el crawler Scrapy para obtener más datos actualizados
+            st.info(f"🔄 Extrayendo datos adicionales para {city} (actual: {current_docs} documentos)")
             
             # Configurar y ejecutar el crawler para la ciudad específica
-            process = CrawlerProcess(get_project_settings())
+            crawler_settings = get_crawler_settings()
+            process = CrawlerProcess(crawler_settings)
             process.crawl(TouristSpider, target_city=city)
             process.start()
             
@@ -635,7 +633,26 @@ def app():
                     rag_planner = RAGPlanner()  # Usa la ruta por defecto que ya está configurada correctamente
                     transport_mode = selected_transport[0] if selected_transport else "A pie"
                     
+                    # FASE DINÁMICA: Procesar con validación automática de calidad
+                    st.info("🔄 Procesando con validación automática de calidad de datos...")
                     rag_data = rag_planner.process_user_request(user_preferences, lat, lon, transport_mode)
+                    
+                    # Validar calidad de datos y activar crawler si es necesario
+                    user_query = f"lugares turísticos en {city} " + " ".join([cat for cat, score in category_interest.items() if score >= 4])
+                    rag_data, validation_reason, triggered_crawler = ensure_fresh_rag_data(
+                        rag_data, user_query, fetch_tourism_data, city, RAGPlanner, 
+                        user_preferences, lat, lon, transport_mode
+                    )
+                    
+                    # Mostrar información sobre la validación
+                    if triggered_crawler:
+                        st.success("🔄 Se activó automáticamente la extracción de datos actualizados")
+                        st.info(f"📋 Motivo: {validation_reason}")
+                    else:
+                        st.success("✅ Los datos existentes son suficientes y actualizados")
+                        if validation_reason != "Datos completos y actualizados":
+                            st.info(f"📋 Estado: {validation_reason}")
+                    
                     # Mostrar información de aspectos si está disponible
                     if hasattr(rag_planner, 'keybert_model'):
                         st.session_state['aspect_analyzer'] = rag_planner.keybert_model

@@ -1,0 +1,29 @@
+{
+    "test_id": 11,
+    "inputs": {
+        "city": "Barcelona",
+        "available_hours": 7,
+        "category_interest": {
+            "history": 5,
+            "religion": 3,
+            "culture": 4,
+            "urban": 2,
+            "nature": 4,
+            "beach": 1,
+            "food": 5,
+            "shopping": 2,
+            "entertainment": 3
+        },
+        "transport_modes": [
+            "Caminar",
+            "Bicicleta",
+            "Bus"
+        ],
+        "max_distance": 20,
+        "user_notes": "Estoy muy interesado en la historia de la ciudad y en probar la comida local. Me encantar\u00eda hacer algunas caminatas y recorridos en bicicleta."
+    },
+    "resultados": {
+        "M": 0.8733825701769549,
+        "S": 0.8720286347528932
+    }
+}

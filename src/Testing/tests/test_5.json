@@ -1,0 +1,28 @@
+{
+    "test_id": 5,
+    "inputs": {
+        "city": "Valencia",
+        "available_hours": 6,
+        "category_interest": {
+            "history": 4,
+            "religion": 3,
+            "culture": 5,
+            "urban": 4,
+            "nature": 2,
+            "beach": 3,
+            "food": 5,
+            "shopping": 3,
+            "entertainment": 4
+        },
+        "transport_modes": [
+            "Caminar",
+            "Bicicleta"
+        ],
+        "max_distance": 20,
+        "user_notes": "Quiero visitar la Ciudad de las Artes y las Ciencias y disfrutar de una aut\u00e9ntica paella valenciana."
+    },
+    "resultados": {
+        "M": 0.8371892525626238,
+        "S": 0.8602020380762059
+    }
+}

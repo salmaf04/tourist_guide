@@ -6,6 +6,13 @@ import random
 class SistemaDifusoImpacto:
     """
     Sistema difuso avanzado para calcular el impacto de una interacción considerando múltiples factores.
+    
+    MEJORAS IMPLEMENTADAS EN FUNCIONES DE MEMBRESÍA:
+    - Satisfacción: Funciones Gaussianas (transiciones graduales para conceptos psicológicos)
+    - Amabilidad: Funciones Trapezoidales (rangos claros con mesetas para valores normales)
+    - Calidad del lugar: Funciones Gaussianas (transiciones suaves para percepción de calidad)
+    - Fatiga: Funciones Gaussianas (progresión natural en forma de campana)
+    - Impacto: Funciones Trapezoidales (rangos neutros claros y extremos bien definidos)
     """
     def __init__(self):
         # Variables de entrada
@@ -25,41 +32,42 @@ class SistemaDifusoImpacto:
     def _definir_variables(self):
         """
         Define las variables lingüísticas y sus funciones de membresía mejoradas.
+        Implementa diferentes tipos de funciones según las características de cada variable.
         """
-        # Satisfacción
-        self.satisfaccion['muy_baja'] = fuzz.trimf(self.satisfaccion.universe, [0, 0, 2])
-        self.satisfaccion['baja'] = fuzz.trimf(self.satisfaccion.universe, [1, 3, 5])
-        self.satisfaccion['media'] = fuzz.trimf(self.satisfaccion.universe, [3, 5, 7])
-        self.satisfaccion['alta'] = fuzz.trimf(self.satisfaccion.universe, [5, 7, 9])
-        self.satisfaccion['muy_alta'] = fuzz.trimf(self.satisfaccion.universe, [8, 10, 10])
+        # Satisfacción - Funciones Gaussianas (concepto psicológico con transiciones graduales)
+        self.satisfaccion['muy_baja'] = fuzz.gaussmf(self.satisfaccion.universe, 1, 0.8)
+        self.satisfaccion['baja'] = fuzz.gaussmf(self.satisfaccion.universe, 3, 1.0)
+        self.satisfaccion['media'] = fuzz.gaussmf(self.satisfaccion.universe, 5, 1.2)
+        self.satisfaccion['alta'] = fuzz.gaussmf(self.satisfaccion.universe, 7, 1.0)
+        self.satisfaccion['muy_alta'] = fuzz.gaussmf(self.satisfaccion.universe, 9, 0.8)
         
-        # Amabilidad
-        self.amabilidad['muy_poca'] = fuzz.trimf(self.amabilidad.universe, [0, 0, 2])
-        self.amabilidad['poca'] = fuzz.trimf(self.amabilidad.universe, [1, 3, 5])
-        self.amabilidad['normal'] = fuzz.trimf(self.amabilidad.universe, [3, 5, 7])
-        self.amabilidad['mucha'] = fuzz.trimf(self.amabilidad.universe, [5, 7, 9])
-        self.amabilidad['excepcional'] = fuzz.trimf(self.amabilidad.universe, [8, 10, 10])
+        # Amabilidad - Funciones Trapezoidales (rangos claros con meseta para valores "normales")
+        self.amabilidad['muy_poca'] = fuzz.trapmf(self.amabilidad.universe, [0, 0, 1, 2.5])
+        self.amabilidad['poca'] = fuzz.trapmf(self.amabilidad.universe, [1.5, 2.5, 3.5, 4.5])
+        self.amabilidad['normal'] = fuzz.trapmf(self.amabilidad.universe, [3.5, 4.5, 5.5, 6.5])
+        self.amabilidad['mucha'] = fuzz.trapmf(self.amabilidad.universe, [5.5, 6.5, 7.5, 8.5])
+        self.amabilidad['excepcional'] = fuzz.trapmf(self.amabilidad.universe, [7.5, 8.5, 10, 10])
         
-        # Calidad del lugar
-        self.calidad_lugar['muy_baja'] = fuzz.trimf(self.calidad_lugar.universe, [0, 0, 2])
-        self.calidad_lugar['baja'] = fuzz.trimf(self.calidad_lugar.universe, [1, 3, 5])
-        self.calidad_lugar['media'] = fuzz.trimf(self.calidad_lugar.universe, [3, 5, 7])
-        self.calidad_lugar['alta'] = fuzz.trimf(self.calidad_lugar.universe, [5, 7, 9])
-        self.calidad_lugar['excepcional'] = fuzz.trimf(self.calidad_lugar.universe, [8, 10, 10])
+        # Calidad del lugar - Funciones Gaussianas (transiciones suaves para percepción de calidad)
+        self.calidad_lugar['muy_baja'] = fuzz.gaussmf(self.calidad_lugar.universe, 1, 0.8)
+        self.calidad_lugar['baja'] = fuzz.gaussmf(self.calidad_lugar.universe, 3, 1.0)
+        self.calidad_lugar['media'] = fuzz.gaussmf(self.calidad_lugar.universe, 5, 1.2)
+        self.calidad_lugar['alta'] = fuzz.gaussmf(self.calidad_lugar.universe, 7, 1.0)
+        self.calidad_lugar['excepcional'] = fuzz.gaussmf(self.calidad_lugar.universe, 9, 0.8)
         
-        # Fatiga
-        self.fatiga['muy_baja'] = fuzz.trimf(self.fatiga.universe, [0, 0, 2])
-        self.fatiga['baja'] = fuzz.trimf(self.fatiga.universe, [1, 3, 5])
-        self.fatiga['media'] = fuzz.trimf(self.fatiga.universe, [3, 5, 7])
-        self.fatiga['alta'] = fuzz.trimf(self.fatiga.universe, [5, 7, 9])
-        self.fatiga['muy_alta'] = fuzz.trimf(self.fatiga.universe, [8, 10, 10])
+        # Fatiga - Funciones Gaussianas (percepción natural con progresión en forma de campana)
+        self.fatiga['muy_baja'] = fuzz.gaussmf(self.fatiga.universe, 1, 0.8)
+        self.fatiga['baja'] = fuzz.gaussmf(self.fatiga.universe, 3, 1.0)
+        self.fatiga['media'] = fuzz.gaussmf(self.fatiga.universe, 5, 1.2)
+        self.fatiga['alta'] = fuzz.gaussmf(self.fatiga.universe, 7, 1.0)
+        self.fatiga['muy_alta'] = fuzz.gaussmf(self.fatiga.universe, 9, 0.8)
         
-        # Impacto (ampliado)
-        self.impacto['muy_negativo'] = fuzz.trimf(self.impacto.universe, [-3, -3, -1.5])
-        self.impacto['negativo'] = fuzz.trimf(self.impacto.universe, [-2, -1, 0])
-        self.impacto['neutral'] = fuzz.trimf(self.impacto.universe, [-0.5, 0, 0.5])
-        self.impacto['positivo'] = fuzz.trimf(self.impacto.universe, [0, 1, 2])
-        self.impacto['muy_positivo'] = fuzz.trimf(self.impacto.universe, [1.5, 3, 3])
+        # Impacto - Funciones Trapezoidales (rangos neutros claros y extremos bien definidos)
+        self.impacto['muy_negativo'] = fuzz.trapmf(self.impacto.universe, [-3, -3, -2.2, -1.5])
+        self.impacto['negativo'] = fuzz.trapmf(self.impacto.universe, [-2.0, -1.2, -0.5, 0])
+        self.impacto['neutral'] = fuzz.trapmf(self.impacto.universe, [-0.3, -0.1, 0.1, 0.3])
+        self.impacto['positivo'] = fuzz.trapmf(self.impacto.universe, [0, 0.5, 1.2, 2.0])
+        self.impacto['muy_positivo'] = fuzz.trapmf(self.impacto.universe, [1.5, 2.2, 3, 3])
 
     def _definir_reglas(self):
         """

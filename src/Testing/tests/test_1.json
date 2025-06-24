@@ -1,0 +1,29 @@
+{
+    "test_id": 1,
+    "inputs": {
+        "city": "Salamanca",
+        "available_hours": 10,
+        "category_interest": {
+            "history": 5,
+            "religion": 4,
+            "culture": 4,
+            "urban": 3,
+            "nature": 3,
+            "beach": 1,
+            "food": 5,
+            "shopping": 2,
+            "entertainment": 3
+        },
+        "transport_modes": [
+            "Caminar",
+            "Bicicleta",
+            "Bus"
+        ],
+        "max_distance": 20,
+        "user_notes": "Estoy muy emocionado por explorar la historia y la cultura de Salamanca, especialmente la Universidad y la Plaza Mayor. Tambi\u00e9n quiero probar la comida local como el hornazo."
+    },
+    "resultados": {
+        "M": 0.8462610024015352,
+        "S": 0.8590642090431903
+    }
+}

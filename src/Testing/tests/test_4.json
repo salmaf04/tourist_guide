@@ -1,0 +1,28 @@
+{
+    "test_id": 4,
+    "inputs": {
+        "city": "Valencia",
+        "available_hours": 10,
+        "category_interest": {
+            "history": 4,
+            "religion": 3,
+            "culture": 5,
+            "urban": 4,
+            "nature": 3,
+            "beach": 2,
+            "food": 5,
+            "shopping": 3,
+            "entertainment": 4
+        },
+        "transport_modes": [
+            "Caminar",
+            "Bicicleta"
+        ],
+        "max_distance": 20,
+        "user_notes": "Quiero explorar el casco antiguo y disfrutar de la paella valenciana."
+    },
+    "resultados": {
+        "M": 0.7803462923196758,
+        "S": 0.7831030267652543
+    }
+}

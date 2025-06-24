@@ -1,0 +1,29 @@
+{
+    "test_id": 3,
+    "inputs": {
+        "city": "Salamanca",
+        "available_hours": 7,
+        "category_interest": {
+            "history": 5,
+            "religion": 3,
+            "culture": 4,
+            "urban": 3,
+            "nature": 2,
+            "beach": 1,
+            "food": 4,
+            "shopping": 2,
+            "entertainment": 3
+        },
+        "transport_modes": [
+            "Caminar",
+            "Bicicleta",
+            "Bus"
+        ],
+        "max_distance": 20,
+        "user_notes": "Estoy muy interesado en la historia y la cultura de Salamanca, especialmente en sus universidades y catedrales. Tambi\u00e9n me gustar\u00eda probar la comida local"
+    },
+    "resultados": {
+        "M": 0.8338056249463958,
+        "S": 0.8430171101497499
+    }
+}

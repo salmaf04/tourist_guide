@@ -2,6 +2,11 @@ from mesa import Model, Agent
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 from .bdi import AgenteBDI, StrategyType, Desire, Intention
+from .messaging_bdi import MessagingBDIAgent
+from .fipa_acl import (
+    ACLMessage, Performative, get_messaging_system,
+    create_request_message, create_recommendation_message, create_inform_message
+)
 
 
 @dataclass
@@ -22,16 +27,16 @@ class Nodo:
         elif not isinstance(self.agentes, list):
             self.agentes = list(self.agentes) if hasattr(self.agentes, '__iter__') else [self.agentes]
 
-class AgenteBDIBase(AgenteBDI):
+class AgenteBDIBase(MessagingBDIAgent):
     """
-    Agente BDI mejorado para la simulación turística.
-    Integra todas las mejoras del sistema BDI.
+    Agente BDI mejorado para la simulación turística con capacidades de mensajería FIPA-ACL.
+    Integra todas las mejoras del sistema BDI con comunicación estructurada.
     """
     def __init__(self, unique_id, model, rol, lugar_id, prompt, estrategia="equilibrada"):
         try:
-            print(f"DEBUG - Inicializando AgenteBDIBase mejorado con unique_id={unique_id}, rol={rol}")
-            # Call parent init with improved BDI system
-            super().__init__(unique_id, model, estrategia)
+            print(f"DEBUG - Inicializando AgenteBDIBase con mensajería FIPA-ACL: unique_id={unique_id}, rol={rol}")
+            # Call parent init with messaging capabilities
+            super().__init__(unique_id, model, estrategia, agent_type=rol)
             
             # Atributos específicos del agente turístico
             self.rol = rol
@@ -53,11 +58,42 @@ class AgenteBDIBase(AgenteBDI):
                 'satisfaction': self.satisfaction
             })
             
-            print(f"DEBUG - AgenteBDIBase mejorado inicializado exitosamente")
+            # Configurar comportamientos específicos de mensajería por rol
+            self._setup_role_specific_messaging()
+            
+            print(f"DEBUG - AgenteBDIBase con mensajería inicializado exitosamente")
         except Exception as e:
-            print(f"ERROR - Fallo en __init__ de AgenteBDIBase mejorado: {str(e)}")
+            print(f"ERROR - Fallo en __init__ de AgenteBDIBase con mensajería: {str(e)}")
             print(f"ERROR - Tipo de error: {type(e)}")
             raise e
+    
+    def _setup_role_specific_messaging(self):
+        """Configura comportamientos de mensajería específicos por rol"""
+        role_configs = {
+            'guía': {
+                'proactive_help': True,
+                'information_sharing': True,
+                'response_priority': 0.9
+            },
+            'mesero': {
+                'service_offers': True,
+                'quick_response': True,
+                'response_priority': 0.8
+            },
+            'vendedor': {
+                'product_promotion': True,
+                'negotiation': True,
+                'response_priority': 0.7
+            },
+            'curador': {
+                'educational_content': True,
+                'detailed_explanations': True,
+                'response_priority': 0.8
+            }
+        }
+        
+        config = role_configs.get(self.rol, {})
+        self.messaging_config = config
 
     def percibir(self):
         """Percepción mejorada específica para agentes turísticos"""
@@ -164,7 +200,7 @@ class AgenteBDIBase(AgenteBDI):
         })
 
     def interactuar_con_turista(self, turista):
-        """Método mejorado de interacción con turistas"""
+        """Método mejorado de interacción con turistas usando mensajería FIPA-ACL"""
         if not hasattr(turista, 'agregar_experiencia'):
             return False
         
@@ -181,10 +217,13 @@ class AgenteBDIBase(AgenteBDI):
                 # Fallback simple
                 impacto = (self.satisfaction - 5) * 0.3
             
-            # Crear experiencia basada en el rol
+            # Crear experiencia basada en el rol usando mensajería
             experiencia = self._crear_experiencia_por_rol(turista)
             
-            # Añadir experiencia al turista
+            # Enviar mensaje al turista usando protocolo FIPA-ACL
+            self._send_interaction_message(turista, experiencia, impacto)
+            
+            # Añadir experiencia al turista (mantener compatibilidad)
             turista.agregar_experiencia(experiencia, impacto)
             
             # Registrar interacción
@@ -192,13 +231,14 @@ class AgenteBDIBase(AgenteBDI):
                 'turista_id': turista.unique_id,
                 'experiencia': experiencia,
                 'impacto': impacto,
-                'timestamp': len(self.interacciones)
+                'timestamp': len(self.interacciones),
+                'via_messaging': True
             })
             
             # Añadir a memoria semántica
             self.semantic_memory.add_memory(
                 f"Interacted with tourist {turista.unique_id}: {experiencia}",
-                {'type': 'interaction', 'role': self.rol, 'impact': impacto}
+                {'type': 'interaction', 'role': self.rol, 'impact': impacto, 'protocol': 'fipa-acl'}
             )
             
             return True
@@ -206,6 +246,38 @@ class AgenteBDIBase(AgenteBDI):
         except Exception as e:
             print(f"Error en interacción: {e}")
             return False
+    
+    def _send_interaction_message(self, turista, experiencia, impacto):
+        """Envía mensaje de interacción usando protocolo FIPA-ACL"""
+        try:
+            # Determinar tipo de mensaje según el rol y el impacto
+            if impacto > 0.5:
+                performative = Performative.RECOMMEND if self.rol in ['guía', 'curador'] else Performative.INFORM
+            elif impacto < -0.5:
+                performative = Performative.WARN
+            else:
+                performative = Performative.INFORM
+            
+            # Crear mensaje contextualizado
+            message = ACLMessage(
+                performative=performative,
+                sender=str(self.unique_id),
+                receiver=str(turista.unique_id),
+                content=experiencia,
+                protocol="tourism-interaction",
+                context={
+                    'agent_role': self.rol,
+                    'location': self.lugar_id,
+                    'impact': impacto,
+                    'interaction_type': 'service'
+                }
+            )
+            
+            # Enviar mensaje
+            self.send_message(message)
+            
+        except Exception as e:
+            print(f"Error enviando mensaje de interacción: {e}")
 
     def _crear_experiencia_por_rol(self, turista) -> str:
         """Crea experiencia específica según el rol"""
@@ -236,16 +308,16 @@ class AgenteBDIBase(AgenteBDI):
         import random
         return random.choice(experiencias)
 
-class TuristaBDI(AgenteBDI):
+class TuristaBDI(MessagingBDIAgent):
     """
-    Turista con arquitectura BDI mejorada.
-    Integra todas las mejoras del sistema BDI.
+    Turista con arquitectura BDI mejorada y capacidades de mensajería FIPA-ACL.
+    Integra todas las mejoras del sistema BDI con comunicación estructurada.
     """
     def __init__(self, unique_id, model, nombre, estrategia="equilibrada"):
         try:
-            print(f"DEBUG - Inicializando TuristaBDI mejorado con unique_id={unique_id}, nombre={nombre}")
-            # Call parent init with improved BDI system
-            super().__init__(unique_id, model, estrategia)
+            print(f"DEBUG - Inicializando TuristaBDI con mensajería FIPA-ACL: unique_id={unique_id}, nombre={nombre}")
+            # Call parent init with messaging capabilities
+            super().__init__(unique_id, model, estrategia, agent_type="turista")
             
             # Atributos específicos del turista
             self.nombre = nombre
@@ -273,11 +345,32 @@ class TuristaBDI(AgenteBDI):
                 'satisfaction': self.satisfaction
             })
             
-            print(f"DEBUG - TuristaBDI mejorado inicializado exitosamente")
+            # Configurar comportamientos específicos de mensajería para turistas
+            self._setup_tourist_messaging()
+            
+            print(f"DEBUG - TuristaBDI con mensajería inicializado exitosamente")
         except Exception as e:
-            print(f"ERROR - Fallo en __init__ de TuristaBDI mejorado: {str(e)}")
+            print(f"ERROR - Fallo en __init__ de TuristaBDI con mensajería: {str(e)}")
             print(f"ERROR - Tipo de error: {type(e)}")
             raise e
+    
+    def _setup_tourist_messaging(self):
+        """Configura comportamientos de mensajería específicos para turistas"""
+        self.messaging_config = {
+            'ask_for_help': True,
+            'request_recommendations': True,
+            'share_experiences': True,
+            'response_priority': 0.6
+        }
+        
+        # Los turistas son más reactivos que proactivos en comunicación
+        self.communication_preferences.update({
+            'proactive': False,
+            'helpful': 0.4,
+            'informative': 0.3,
+            'friendly': 0.7,
+            'response_time': 'medium'
+        })
 
     LIMITE_ALTA = 5
     LIMITE_MEDIA = 7

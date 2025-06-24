@@ -8,6 +8,11 @@ import google.generativeai as genai
 from .fuzzy_system import SistemaDifusoImpacto
 from .mistral_client import MistralClient
 from .models import AgenteBDIBase, TuristaBDI, Nodo
+from .fipa_acl import (
+    ACLMessage, Performative, get_messaging_system,
+    create_request_message, create_recommendation_message, create_inform_message,
+    cleanup_messaging_system
+)
 
 GEMINI_API_KEY = 'AIzaSyCkN0mxdFQpGajEwB8sZm2fUsJzhpTCfvk'  
 genai.configure(api_key=GEMINI_API_KEY)
@@ -66,78 +71,192 @@ class GeneradorAgentes:
 
 class SimuladorInteracciones:
     """
-    Simula interacciones entre el turista y los agentes BDI.
+    Simula interacciones entre el turista y los agentes BDI usando protocolo FIPA-ACL.
     """
     @staticmethod
     def interactuar(turista: TuristaBDI, agente: AgenteBDIBase, nodo: Nodo, max_interacciones: int = 1):
         """
-        Realiza una serie de interacciones entre un turista y un agente en un nodo.
+        Realiza una serie de interacciones entre un turista y un agente en un nodo usando mensajería FIPA-ACL.
         """
+        print(f"DEBUG - Iniciando interacción FIPA-ACL entre {turista.nombre} y {agente.rol} en {nodo.nombre}")
+        
         interacciones_realizadas = 0
         while interacciones_realizadas < max_interacciones:
-            contexto = "\n".join([
-                f"Contexto previo: {ctx['content']}" 
-                for ctx in turista.contexto_actual[-2:] if ctx.get('content')
-            ])
+            # El turista inicia la comunicación con una consulta o solicitud
+            conversation_id = SimuladorInteracciones._initiate_tourist_communication(turista, agente, nodo)
             
-            prompt = (
-                f"Como {agente.rol} en {nodo.nombre}, interactúa con el turista {turista.nombre} "
-                f"que está explorando el lugar. {nodo.descripcion}\n"
-                f"Contexto de la conversación:\n{contexto}\n"
-                f"{turista.nombre}: [Explora {nodo.nombre}]\n"
-                f"Responde en español con una frase corta y amigable."
-            )
+            # El agente responde usando su sistema de mensajería BDI
+            response_success = SimuladorInteracciones._process_agent_response(agente, turista, nodo, conversation_id)
             
-            respuesta_texto = mistral_client.generate(prompt)
-            
-            if not respuesta_texto or respuesta_texto in ["[Respuesta no disponible]", "[Error de generación]"]:
-                respuestas_fallback = [
-                    f"¡Bienvenido a {nodo.nombre}! Es un placer ayudarte.",
-                    f"Te recomiendo explorar esta área, es muy interesante.",
-                    f"¿Hay algo específico que te gustaría saber sobre {nodo.nombre}?",
-                    f"Espero que disfrutes tu visita a {nodo.nombre}.",
-                    f"Este lugar tiene mucha historia, déjame contarte algo interesante."
-                ]
-                respuesta_texto = random.choice(respuestas_fallback)
-                print(f"API falló, usando respuesta fallback: {respuesta_texto}")
-            else:
-                print(f"Respuesta de API: {respuesta_texto}")
-            
-            # Generar amabilidad más realista basada en el tipo de lugar y agente
-            base_amabilidad = SimuladorInteracciones._get_base_amabilidad(agente.rol, nodo.tipo)
-            amabilidad_valor = random.uniform(base_amabilidad - 1.5, base_amabilidad + 1.5)
-            amabilidad_valor = max(1, min(10, amabilidad_valor))
-            
-            print(f"DEBUG - Antes del impacto: satisfacción={turista.satisfaccion:.2f}")
-            
-            # Usar el sistema difuso mejorado con más parámetros
-            impacto = sistema_difuso.calcular_impacto(
-                amabilidad_valor=amabilidad_valor,
-                satisfaccion_actual=turista.satisfaccion,
-                lugar_tipo=nodo.tipo
-            )
-            
-            experiencia = f"{nodo.nombre} ({agente.rol}): {respuesta_texto}"
-            
-            print(f"DEBUG - Agregando experiencia con impacto: {impacto:.2f}")
-            turista.agregar_experiencia(experiencia, impacto)
-            turista.contexto_actual.append({"role": "assistant", "content": respuesta_texto})
-            
-            agente.interacciones.append({
-                "turista": turista.nombre,
-                "respuesta": respuesta_texto,
-                "impacto": impacto,
-                "turno": interacciones_realizadas + 1
-            })
-            
-            print(f"DEBUG - Nueva experiencia agregada: {experiencia[:80]}...")
-            print(f"DEBUG - Impacto aplicado: {impacto:.2f}")
-            print(f"DEBUG - Satisfacción después: {turista.satisfaccion:.2f}")
-            print(f"DEBUG - Total memorias: Alta={len(turista.memoria_alta)}, Media={len(turista.memoria_media)}, Baja={len(turista.memoria_baja)}")
+            if response_success:
+                # Calcular impacto de la interacción
+                impacto = SimuladorInteracciones._calculate_interaction_impact(agente, nodo)
+                
+                # Crear experiencia para el turista
+                experiencia = SimuladorInteracciones._create_experience_from_messaging(agente, nodo, impacto)
+                
+                print(f"DEBUG - Experiencia FIPA-ACL creada: {experiencia[:80]}...")
+                print(f"DEBUG - Impacto calculado: {impacto:.2f}")
+                
+                # Agregar experiencia al turista
+                turista.agregar_experiencia(experiencia, impacto)
+                
+                # Registrar interacción en el agente
+                agente.interacciones.append({
+                    "turista": turista.nombre,
+                    "respuesta": experiencia,
+                    "impacto": impacto,
+                    "turno": interacciones_realizadas + 1,
+                    "protocol": "fipa-acl",
+                    "conversation_id": conversation_id
+                })
+                
+                print(f"DEBUG - Satisfacción después de FIPA-ACL: {turista.satisfaccion:.2f}")
+                print(f"DEBUG - Total memorias: Alta={len(turista.memoria_alta)}, Media={len(turista.memoria_media)}, Baja={len(turista.memoria_baja)}")
             
             interacciones_realizadas += 1
             if random.random() > 0.8:
                 break
+    
+    @staticmethod
+    def _initiate_tourist_communication(turista: TuristaBDI, agente: AgenteBDIBase, nodo: Nodo) -> str:
+        """Inicia comunicación del turista usando protocolo FIPA-ACL"""
+        # Determinar tipo de mensaje según el contexto
+        if turista.satisfaccion < 4:
+            # Turista insatisfecho busca ayuda
+            message = create_request_message(
+                sender=str(turista.unique_id),
+                receiver=str(agente.unique_id),
+                content=f"Necesito ayuda para disfrutar mejor mi visita a {nodo.nombre}",
+                context={
+                    'location': nodo.nombre,
+                    'tourist_satisfaction': turista.satisfaccion,
+                    'urgency': 'high' if turista.satisfaccion < 3 else 'medium'
+                }
+            )
+        elif agente.rol in ['guía', 'curador']:
+            # Solicitar información a agentes informativos
+            message = ACLMessage(
+                performative=Performative.QUERY,
+                sender=str(turista.unique_id),
+                receiver=str(agente.unique_id),
+                content=f"¿Qué me puedes contar sobre {nodo.nombre}?",
+                protocol="tourism-information",
+                context={
+                    'location': nodo.nombre,
+                    'tourist_satisfaction': turista.satisfaccion,
+                    'information_type': 'general'
+                }
+            )
+        elif agente.rol in ['mesero', 'vendedor']:
+            # Consultar servicios
+            message = create_request_message(
+                sender=str(turista.unique_id),
+                receiver=str(agente.unique_id),
+                content=f"¿Qué servicios ofrecen en {nodo.nombre}?",
+                context={
+                    'location': nodo.nombre,
+                    'tourist_satisfaction': turista.satisfaccion,
+                    'service_type': 'general'
+                }
+            )
+        else:
+            # Saludo general
+            message = create_inform_message(
+                sender=str(turista.unique_id),
+                receiver=str(agente.unique_id),
+                information=f"Hola, estoy visitando {nodo.nombre}",
+                context={
+                    'location': nodo.nombre,
+                    'tourist_satisfaction': turista.satisfaccion,
+                    'interaction_type': 'greeting'
+                }
+            )
+        
+        # Enviar mensaje usando el sistema de mensajería del turista
+        success = turista.send_message(message)
+        print(f"DEBUG - Mensaje turista enviado: {success}, tipo: {message.performative.value}")
+        
+        return message.conversation_id
+    
+    @staticmethod
+    def _process_agent_response(agente: AgenteBDIBase, turista: TuristaBDI, nodo: Nodo, conversation_id: str) -> bool:
+        """Procesa la respuesta del agente usando su sistema BDI con mensajería"""
+        try:
+            # Forzar procesamiento de mensajes pendientes en el agente
+            agente._process_incoming_messages()
+            
+            # Verificar si hay mensajes para procesar
+            if agente.message_queue.size() > 0:
+                # El agente procesará el mensaje en su próximo ciclo BDI
+                # Simular un paso del agente para procesar el mensaje
+                agente.step()
+                return True
+            else:
+                print(f"DEBUG - No hay mensajes pendientes para {agente.rol}")
+                return False
+                
+        except Exception as e:
+            print(f"ERROR - Procesando respuesta del agente: {e}")
+            return False
+    
+    @staticmethod
+    def _calculate_interaction_impact(agente: AgenteBDIBase, nodo: Nodo) -> float:
+        """Calcula el impacto de la interacción usando sistema difuso"""
+        # Obtener amabilidad base del agente
+        base_amabilidad = SimuladorInteracciones._get_base_amabilidad(agente.rol, nodo.tipo)
+        
+        # Añadir variabilidad basada en el estado del agente
+        agent_satisfaction = getattr(agente, 'satisfaction', 5.0)
+        agent_energy = getattr(agente, 'energy', 5.0)
+        
+        # Ajustar amabilidad según estado del agente
+        amabilidad_ajustada = base_amabilidad + (agent_satisfaction - 5) * 0.2 + (agent_energy - 5) * 0.1
+        amabilidad_final = max(1, min(10, amabilidad_ajustada + random.uniform(-1.0, 1.0)))
+        
+        # Usar sistema difuso para calcular impacto
+        impacto = sistema_difuso.calcular_impacto(
+            amabilidad_valor=amabilidad_final,
+            satisfaccion_actual=5.0,  # Valor neutral para el cálculo
+            lugar_tipo=nodo.tipo
+        )
+        
+        return impacto
+    
+    @staticmethod
+    def _create_experience_from_messaging(agente: AgenteBDIBase, nodo: Nodo, impacto: float) -> str:
+        """Crea experiencia basada en la interacción de mensajería"""
+        # Obtener estadísticas de comunicación del agente
+        comm_stats = agente.get_communication_stats()
+        
+        # Crear experiencia contextualizada
+        if impacto > 0.5:
+            experiencias_positivas = [
+                f"Tuviste una excelente interacción con el {agente.rol} en {nodo.nombre} vía mensajería FIPA-ACL",
+                f"El {agente.rol} te proporcionó información muy útil sobre {nodo.nombre} usando comunicación estructurada",
+                f"La comunicación con el {agente.rol} en {nodo.nombre} fue muy satisfactoria y bien organizada"
+            ]
+            base_experience = random.choice(experiencias_positivas)
+        elif impacto < -0.5:
+            experiencias_negativas = [
+                f"La comunicación con el {agente.rol} en {nodo.nombre} no fue muy efectiva",
+                f"Hubo dificultades en la interacción con el {agente.rol} en {nodo.nombre}",
+                f"La respuesta del {agente.rol} en {nodo.nombre} no fue muy útil"
+            ]
+            base_experience = random.choice(experiencias_negativas)
+        else:
+            experiencias_neutrales = [
+                f"Tuviste una interacción estándar con el {agente.rol} en {nodo.nombre}",
+                f"El {agente.rol} te atendió de manera profesional en {nodo.nombre}",
+                f"La comunicación con el {agente.rol} en {nodo.nombre} fue correcta"
+            ]
+            base_experience = random.choice(experiencias_neutrales)
+        
+        # Añadir detalles del protocolo si la comunicación fue exitosa
+        if comm_stats['successful_interactions'] > 0:
+            base_experience += " (comunicación FIPA-ACL exitosa)"
+        
+        return base_experience
 
     @staticmethod
     def _get_base_amabilidad(rol: str, tipo_lugar: str) -> float:
@@ -180,7 +299,7 @@ class SimuladorInteracciones:
 
 class ModeloTurismo(Model):
     """
-    Modelo principal de la simulación de turismo con agentes BDI.
+    Modelo principal de la simulación de turismo con agentes BDI y protocolo FIPA-ACL.
     """
     def __init__(self, lista_nodos: List[Dict], nombre_turista: str = "Turista"):
         super().__init__()
@@ -189,6 +308,10 @@ class ModeloTurismo(Model):
         self.datacollector = DataCollector(
             agent_reporters={"Satisfacción": lambda a: getattr(a, 'satisfaccion', None)}
         )
+
+        # Inicializar sistema de mensajería FIPA-ACL
+        self.dispatcher, self.conversation_manager, self.protocol_handler = get_messaging_system()
+        print("DEBUG - Sistema de mensajería FIPA-ACL inicializado")
 
         # Convert input to Nodo objects if they aren't already
         self.nodos = []
@@ -208,15 +331,15 @@ class ModeloTurismo(Model):
 
         print(f"DEBUG - Creados {len(self.nodos)} nodos")
 
-        # Initialize the tourist with proper parameters
+        # Initialize the tourist with proper parameters and messaging capabilities
         try:
-            print(f"DEBUG - Intentando crear TuristaBDI con nombre: {nombre_turista}")
+            print(f"DEBUG - Intentando crear TuristaBDI con mensajería FIPA-ACL: {nombre_turista}")
             self.turista = TuristaBDI(unique_id=0, model=self, nombre=nombre_turista)
-            print(f"DEBUG - TuristaBDI creado exitosamente")
+            print(f"DEBUG - TuristaBDI con mensajería creado exitosamente")
             self.schedule.add(self.turista)
-            print(f"DEBUG - Turista BDI agregado al schedule")
+            print(f"DEBUG - Turista BDI con mensajería agregado al schedule")
         except Exception as e:
-            print(f"ERROR - Fallo al crear TuristaBDI: {str(e)}")
+            print(f"ERROR - Fallo al crear TuristaBDI con mensajería: {str(e)}")
             print(f"ERROR - Tipo de error: {type(e)}")
             raise e
 
@@ -225,24 +348,27 @@ class ModeloTurismo(Model):
             print(f"DEBUG - Procesando nodo {nodo.nombre} con agentes: {nodo.agentes}")
             for rol in nodo.agentes:
                 try:
-                    print(f"DEBUG - Intentando crear agente {rol} en {nodo.nombre}")
+                    print(f"DEBUG - Intentando crear agente {rol} con mensajería FIPA-ACL en {nodo.nombre}")
                     agente = GeneradorAgentes.crear_agente(rol=rol, nodo=nodo, model=self)
                     self.schedule.add(agente)
                     agentes_creados += 1
-                    print(f"DEBUG - Agente BDI creado: {agente.rol} en {nodo.nombre} (ID: {agente.unique_id})")
+                    print(f"DEBUG - Agente BDI con mensajería creado: {agente.rol} en {nodo.nombre} (ID: {agente.unique_id})")
                 except Exception as e:
-                    print(f"ERROR - Fallo al crear agente {rol} en {nodo.nombre}: {str(e)}")
+                    print(f"ERROR - Fallo al crear agente {rol} con mensajería en {nodo.nombre}: {str(e)}")
                     print(f"ERROR - Tipo de error: {type(e)}")
                     raise e
 
-        print(f"DEBUG - Total agentes creados: {agentes_creados}")
+        print(f"DEBUG - Total agentes con mensajería creados: {agentes_creados}")
         print(f"DEBUG - Total agentes en schedule: {len(self.schedule.agents)}")
+        
+        # Configurar sistema difuso para el modelo
+        self.sistema_difuso = sistema_difuso
 
     def step(self):
         """
-        Ejecuta un paso de simulación mejorado con interacciones más realistas.
+        Ejecuta un paso de simulación con protocolo FIPA-ACL integrado.
         """
-        print(f"DEBUG - Iniciando paso, satisfacción actual: {self.turista.satisfaccion:.2f}")
+        print(f"DEBUG - Iniciando paso FIPA-ACL, satisfacción actual: {self.turista.satisfaccion:.2f}")
         print(f"DEBUG - Total agentes en schedule: {len(self.schedule.agents)}")
         
         # Seleccionar un nodo aleatorio para visitar en este paso
@@ -253,11 +379,11 @@ class ModeloTurismo(Model):
             print(f"DEBUG - Visitando {nodo_actual.nombre}: {len(agentes_en_nodo)} agentes encontrados")
             
             if agentes_en_nodo:
-                # Seleccionar agente para interactuar
+                # Seleccionar agente para interactuar usando protocolo FIPA-ACL
                 agente = random.choice(agentes_en_nodo)
-                print(f"DEBUG - Interactuando en {nodo_actual.nombre} con {agente.rol}")
+                print(f"DEBUG - Interacción FIPA-ACL en {nodo_actual.nombre} con {agente.rol}")
                 
-                # Realizar interacción usando el simulador mejorado
+                # Realizar interacción usando el simulador con protocolo FIPA-ACL
                 SimuladorInteracciones.interactuar(
                     turista=self.turista,
                     agente=agente,
@@ -269,11 +395,28 @@ class ModeloTurismo(Model):
                 # Experiencia sin agente (autoexploración)
                 self._experiencia_autoexploracion(nodo_actual)
         
-        # Ejecutar step de agentes BDI
+        # Ejecutar step de agentes BDI con capacidades de mensajería
         self.schedule.step()
         
-        print(f"DEBUG - Fin del paso, satisfacción final: {self.turista.satisfaccion:.2f}")
+        # Procesar mensajes pendientes en el sistema
+        self._process_system_messages()
+        
+        print(f"DEBUG - Fin del paso FIPA-ACL, satisfacción final: {self.turista.satisfaccion:.2f}")
         self.datacollector.collect(self)
+    
+    def _process_system_messages(self):
+        """Procesa mensajes pendientes en el sistema de mensajería"""
+        try:
+            # Obtener estadísticas del sistema de mensajería
+            stats = self.dispatcher.get_stats()
+            if stats['messages_sent'] > 0:
+                print(f"DEBUG - Mensajes FIPA-ACL procesados: {stats['messages_sent']} enviados, {stats['messages_delivered']} entregados")
+            
+            # Limpiar conversaciones antiguas
+            self.conversation_manager.cleanup_old_conversations(max_age_hours=1)
+            
+        except Exception as e:
+            print(f"ERROR - Procesando mensajes del sistema: {e}")
 
     def _experiencia_autoexploracion(self, nodo):
         """
@@ -305,7 +448,7 @@ class ModeloTurismo(Model):
 
 def ejecutar_simulaciones(n_simulaciones: int, pasos: int = 10):
     """
-    Ejecuta varias simulaciones y muestra la satisfacción y recuerdos del turista.
+    Ejecuta varias simulaciones con protocolo FIPA-ACL integrado y muestra la satisfacción y recuerdos del turista.
     """
     lista_nodos = [
         {
@@ -321,22 +464,46 @@ def ejecutar_simulaciones(n_simulaciones: int, pasos: int = 10):
             "tipo": "restaurante",
             "descripcion": "Famoso por su café orgánico.",
             "agentes": ["mesero"]
+        },
+        {
+            "id": "parque_1",
+            "nombre": "Parque Central",
+            "tipo": "parque",
+            "descripcion": "Hermoso parque con jardines y fuentes.",
+            "agentes": ["jardinero", "guía"]
         }
     ]
     satisfacciones = []
+    estadisticas_comunicacion = []
+    
     for i in range(n_simulaciones):
-        print(f"\n=== INICIANDO SIMULACIÓN {i+1} ===")
+        print(f"\n=== INICIANDO SIMULACIÓN FIPA-ACL {i+1} ===")
         modelo = ModeloTurismo(lista_nodos, nombre_turista=f"Ana_{i+1}")
         print(f"Satisfacción inicial: {modelo.turista.satisfaccion}")
+        print(f"Sistema de mensajería FIPA-ACL: {len(modelo.dispatcher.agent_queues)} agentes registrados")
         
         for paso in range(pasos):
-            print(f"\n--- Paso {paso+1} ---")
+            print(f"\n--- Paso FIPA-ACL {paso+1} ---")
             modelo.step()
             print(f"Satisfacción después del paso {paso+1}: {modelo.turista.satisfaccion:.2f}")
         
         satisfaccion_final = modelo.turista.satisfaccion
         satisfacciones.append(satisfaccion_final)
-        print(f"\nSimulación {i+1}: Satisfacción final = {satisfaccion_final:.1f}/10")
+        
+        # Obtener estadísticas de comunicación
+        comm_stats = modelo.dispatcher.get_stats()
+        tourist_comm_stats = modelo.turista.get_communication_stats()
+        estadisticas_comunicacion.append({
+            'sistema': comm_stats,
+            'turista': tourist_comm_stats
+        })
+        
+        print(f"\nSimulación FIPA-ACL {i+1}: Satisfacción final = {satisfaccion_final:.1f}/10")
+        print(f"Estadísticas de comunicación:")
+        print(f"  - Mensajes del sistema: {comm_stats['messages_sent']} enviados, {comm_stats['messages_delivered']} entregados")
+        print(f"  - Mensajes del turista: {tourist_comm_stats['messages_sent']} enviados, {tourist_comm_stats['messages_received']} recibidos")
+        print(f"  - Conversaciones iniciadas: {tourist_comm_stats['conversations_initiated']}")
+        print(f"  - Interacciones exitosas: {tourist_comm_stats['successful_interactions']}")
         
         # Debug memory contents
         print(f"Memorias totales: Alta={len(modelo.turista.memoria_alta)}, Media={len(modelo.turista.memoria_media)}, Baja={len(modelo.turista.memoria_baja)}")
@@ -348,13 +515,36 @@ def ejecutar_simulaciones(n_simulaciones: int, pasos: int = 10):
                 print(f"- {rec}")
         else:
             print("- No hay recuerdos significativos")
-        print("=" * 50)
+        
+        # Mostrar estadísticas de agentes
+        print("\nEstadísticas de agentes:")
+        for agent in modelo.schedule.agents:
+            if hasattr(agent, 'rol') and agent.rol != 'turista':
+                agent_stats = agent.get_communication_stats()
+                print(f"  - {agent.rol}: {agent_stats['messages_sent']} enviados, {agent_stats['successful_interactions']} exitosas")
+        
+        print("=" * 60)
+    
+    # Estadísticas finales
     promedio = sum(satisfacciones) / len(satisfacciones)
-    print(f"\nPromedio de satisfacción tras {n_simulaciones} simulaciones: {promedio:.2f}/10")
-    print("Prueba sistema difuso:")
+    total_mensajes = sum(stats['sistema']['messages_sent'] for stats in estadisticas_comunicacion)
+    total_conversaciones = sum(stats['turista']['conversations_initiated'] for stats in estadisticas_comunicacion)
+    
+    print(f"\n=== RESUMEN SIMULACIONES FIPA-ACL ===")
+    print(f"Promedio de satisfacción tras {n_simulaciones} simulaciones: {promedio:.2f}/10")
+    print(f"Total mensajes FIPA-ACL intercambiados: {total_mensajes}")
+    print(f"Total conversaciones iniciadas: {total_conversaciones}")
+    print(f"Promedio mensajes por simulación: {total_mensajes/n_simulaciones:.1f}")
+    
+    print("\nPrueba sistema difuso:")
     print("Impacto esperado positivo:", sistema_difuso.calcular_impacto(8.0, 3.0))
     print("Impacto esperado negativo:", sistema_difuso.calcular_impacto(2.0, 8.0))
-    return satisfacciones, promedio
+    
+    # Limpiar sistema de mensajería al final
+    cleanup_messaging_system()
+    print("Sistema de mensajería FIPA-ACL limpiado")
+    
+    return satisfacciones, promedio, estadisticas_comunicacion
 
 if __name__ == "__main__":
     n_simulaciones = 3

@@ -1,0 +1,29 @@
+{
+    "test_id": 6,
+    "inputs": {
+        "city": "Salamanca",
+        "available_hours": 10,
+        "category_interest": {
+            "history": 5,
+            "religion": 4,
+            "culture": 5,
+            "urban": 3,
+            "nature": 4,
+            "beach": 1,
+            "food": 4,
+            "shopping": 2,
+            "entertainment": 3
+        },
+        "transport_modes": [
+            "Caminar",
+            "Bicicleta",
+            "Bus"
+        ],
+        "max_distance": 20,
+        "user_notes": "Quiero visitar la Plaza Mayor y explorar la historia de la universidad m\u00e1s antigua de Espa\u00f1a."
+    },
+    "resultados": {
+        "M": 0.8353780855154911,
+        "S": 0.8470335797693125
+    }
+}

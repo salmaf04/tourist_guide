@@ -1,0 +1,29 @@
+{
+    "test_id": 9,
+    "inputs": {
+        "city": "Agaete",
+        "available_hours": 7,
+        "category_interest": {
+            "history": 4,
+            "religion": 3,
+            "culture": 3,
+            "urban": 2,
+            "nature": 5,
+            "beach": 4,
+            "food": 5,
+            "shopping": 2,
+            "entertainment": 3
+        },
+        "transport_modes": [
+            "Caminar",
+            "Bicicleta",
+            "Bus"
+        ],
+        "max_distance": 20,
+        "user_notes": "Quiero explorar los paisajes naturales de Agaete y disfrutar de la gastronom\u00eda local."
+    },
+    "resultados": {
+        "M": 0.8170570953013783,
+        "S": 0.8373376041523656
+    }
+}

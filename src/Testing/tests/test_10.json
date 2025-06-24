@@ -1,0 +1,29 @@
+{
+    "test_id": 10,
+    "inputs": {
+        "city": "Cocentaina",
+        "available_hours": 10,
+        "category_interest": {
+            "history": 5,
+            "religion": 3,
+            "culture": 4,
+            "urban": 2,
+            "nature": 4,
+            "beach": 1,
+            "food": 5,
+            "shopping": 3,
+            "entertainment": 2
+        },
+        "transport_modes": [
+            "Caminar",
+            "Bicicleta",
+            "Bus"
+        ],
+        "max_distance": 20,
+        "user_notes": "Me encantar\u00eda explorar el casco antiguo y probar la gastronom\u00eda local. Tambi\u00e9n me gustar\u00eda hacer una ruta de senderismo si el tiempo lo permite."
+    },
+    "resultados": {
+        "M": 0.7771963224825248,
+        "S": 0.8089724016631892
+    }
+}

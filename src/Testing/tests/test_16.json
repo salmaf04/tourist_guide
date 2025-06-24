@@ -1,0 +1,29 @@
+{
+    "test_id": 16,
+    "inputs": {
+        "city": "Barcelona",
+        "available_hours": 7,
+        "category_interest": {
+            "history": 5,
+            "religion": 3,
+            "culture": 4,
+            "urban": 3,
+            "nature": 4,
+            "beach": 5,
+            "food": 4,
+            "shopping": 2,
+            "entertainment": 3
+        },
+        "transport_modes": [
+            "Caminar",
+            "Bicicleta",
+            "Bus"
+        ],
+        "max_distance": 20,
+        "user_notes": "Quiero disfrutar de la belleza natural y la rica historia de Cadella, adem\u00e1s de probar la gastronom\u00eda local."
+    },
+    "resultados": {
+        "M": 0.8061225134399659,
+        "S": 0.8062289724996137
+    }
+}

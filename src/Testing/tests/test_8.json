@@ -1,0 +1,29 @@
+{
+    "test_id": 8,
+    "inputs": {
+        "city": "Granada",
+        "available_hours": 6,
+        "category_interest": {
+            "history": 5,
+            "religion": 3,
+            "culture": 4,
+            "urban": 3,
+            "nature": 4,
+            "beach": 1,
+            "food": 5,
+            "shopping": 2,
+            "entertainment": 3
+        },
+        "transport_modes": [
+            "Caminar",
+            "Bus",
+            "Coche/taxi"
+        ],
+        "max_distance": 20,
+        "user_notes": "Quiero visitar la Alhambra y probar la gastronom\u00eda local"
+    },
+    "resultados": {
+        "M": 0.8199660624567537,
+        "S": 0.8376379682574947
+    }
+}

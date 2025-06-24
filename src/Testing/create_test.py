@@ -87,9 +87,8 @@ class TestCreator:
         for place in self.ra.places_data:
                 available_cities.add(place.get('location', {}).get('city', 'Unknown'))
         
-        #AVAILABLE_CITIES=sorted(list(available_cities))
-        AVAILABLE_CITIES=['Barcelona','Salamanca']
-
+        AVAILABLE_CITIES=sorted(list(available_cities))
+        
         TRANSPORT_MODES = app.TRANSPORT_MODES
 
         CATEGORIES=app.CATEGORIES
